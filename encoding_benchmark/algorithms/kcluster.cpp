@@ -28,6 +28,8 @@ std::pair<std::vector<uint8_t>, GlobalDiagnostics> KCluster::encode_multidim_wit
     const std::string& csv_file_path, int& dim,
     int k, int page_size, int pack_size, int block_size) 
 {
+    // The strategy needs to be wrapped to match the old signature for the old impl function
+    // For the new one, we can call the _with_diag versions directly inside.
     return ClusterLogic::encode_multidim_impl_with_diag(
         csv_file_path, dim, "KCluster", k, pack_size, block_size, page_size
     );

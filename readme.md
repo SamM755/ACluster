@@ -77,6 +77,29 @@ This will execute the pre-configured performance tests on the datasets included 
 
 The main source file (e.g., `main.cpp` or `benchmark.cpp`) is pre-configured with the experimental setups described in our paper. By examining this file, you can see how different methods (KCluster, ACluster) and datasets are tested. To reproduce specific results, you can modify the main function to run only the desired tests, following the parameters detailed in the paper's **"Experimental Setup"** section.
 
+#### Mapping Execution Functions to Paper Figures
+
+Below is the explicit mapping between the functions in `main.cpp` and the experimental results presented in the manuscript:
+
+*   **Figures 6, 7, 8, & 9 (Overall Performance Analysis: Compression Ratio, Encoding/Decoding Time):**
+    Run the core loop in `main()` iterating through the datasets using `NoneCompressor` as the secondary strategy. This will execute:
+    *   `run_columnar_encoder_test<...>` (for Chimp, Elf, Gorilla, RLE, Huffman, ALP)
+    *   `run_multidim_reger_test` (for REGER)
+    *   `run_cluster_encoder_test<...>` (for our KCluster and ACluster)
+    *(Outputs are logged to `output/benchmark_results.csv` for easy plotting).*
+
+*   **Figures 14, 15, & 16 (Complementation to General Compression - e.g., +GZIP):**
+    In the `main()` function, change the strategy vector to use `GzipCompressor` (i.e., `std::vector<SecondaryCompressor*> strategies = { &gzip_comp };`). Running the core loop will reproduce the results combined with GZIP.
+
+*   **Figure 13 (Impact of Parameter $K$ on KCluster):**
+    Uncomment and execute the `run_k_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates $K \in \{10, 50, 100, 500, 1000\}$ on multi-dimensional datasets.
+
+*   **Figure 18 (Pack Size Evaluation):**
+    Uncomment and execute the `run_pack_size_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates pack sizes ranging from 1 to 256.
+
+*   **Figure 19 (System Page Size Evaluation):**
+    Uncomment and execute the `run_page_size_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates system page sizes from 1,000 to 20,000.
+
 
 ### System Deployment in IoTDB and TsFile
 

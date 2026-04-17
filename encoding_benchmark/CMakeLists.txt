@@ -24,5 +24,8 @@ add_executable(
 target_include_directories(benchmark PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(benchmark PRIVATE stdc++fs) # GCC/Clang
+if(WIN32)
+    target_link_libraries(benchmark PRIVATE psapi)
+endif()
 
 message(STATUS "CMake configuration complete. You can now build the 'benchmark' target.")

@@ -1,3 +1,0 @@
-C:\msys64\mingw64\bin\cmake.exe -E rm -f CMakeFiles\benchmark.dir/objects.a
-C:\msys64\mingw64\bin\ar.exe qc CMakeFiles\benchmark.dir/objects.a @CMakeFiles\benchmark.dir\objects1.rsp
-C:\msys64\mingw64\bin\c++.exe -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles\benchmark.dir/objects.a -Wl,--no-whole-archive -o benchmark.exe -Wl,--out-implib,libbenchmark.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\benchmark.dir\linkLibs.rsp
