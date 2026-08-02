@@ -29,7 +29,6 @@ struct PreprocessorResult {
     std::vector<long long> min_values;
 };
 
-// 用于记录各阶段耗时
 struct StageTimings {
     long long preprocessing_ns = 0;
     long long clustering_ns = 0;
@@ -37,7 +36,6 @@ struct StageTimings {
     long long bitstream_gen_ns = 0;
 };
 
-// 用于记录各部分编码大小
 struct ComponentSizes {
     size_t header_bits = 0;
     size_t medoids_bits = 0;
@@ -50,7 +48,7 @@ struct KClusterCosts {
 };
 
 struct AClusterCosts {
-    long long final_total_cost_bits = 0; // 最终总 cost
+    long long final_total_cost_bits = 0;
 };
 
 struct PageDiagnostics {
@@ -64,12 +62,10 @@ struct PageDiagnostics {
 
     std::string algorithm_name; 
 };
-// 用于聚合所有页的最终结果
 struct GlobalDiagnostics {
     StageTimings total_timings;
     ComponentSizes total_sizes;
     long long total_reference_points = 0;
-    // ... 可以添加其他全局统计信息 ...
 
     void print_summary(size_t num_pages) {
         long long total_time = total_timings.preprocessing_ns + total_timings.clustering_ns +

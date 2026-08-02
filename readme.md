@@ -1,113 +1,99 @@
-# Cluster-based Lossless Encoding Method (C++ Implementation)
+# ACluster
 
-This repository contains the C++ implementation of the core algorithms presented in our paper. This version is designed for high performance and serves as the basis for the experimental results reported.
+This repository contains the ACluster encoding benchmark, public datasets, and experiment drivers.
 
-The methods have been designed for integration with data systems like Apache TsFile and Apache IoTDB, ensuring their robustness and scalability.
+## Data
 
-This paper introduces a novel cluster-based lossless compression framework for multi-dimensional numerical data. Our approach pivots from traditional local, single-dimensional references to using **global, multi-dimensional reference points** identified through our proposed algorithms. By capturing the underlying spatial structure of the entire dataset, our methods, **KCluster** and **ACluster**, achieve superior compression ratios while maintaining high time efficiency.
+`encoding_benchmark/data/raw` contains the full-column public datasets. `encoding_benchmark/data/final` contains the columns used by the benchmark. The four native one-dimensional datasets are unchanged by column selection.
 
-### Code Structure
+| Dataset | Raw dimensions | Final dimensions |
+|---|---:|---:|
+| SSD | 1 | 1 |
+| BC | 1 | 1 |
+| PI | 1 | 1 |
+| WS | 1 | 1 |
+| CT | 10 | 3 |
+| Crop | 46 | 20 |
+| Gas | 64 | 48 |
+| BT | 77 | 49 |
+| Musk | 166 | 111 |
 
-For readers interested in the specific implementation details, the core logic of our proposed methods is organized as follows:
+Regenerate the final files with:
 
--   **`encoding_benchmark/algorithms/`**: This directory contains the implementation of all encoding methods discussed in the paper.
-    -   **`kcluster.cpp`** / **`kcluster.h`**: The main implementation of our **KCluster** algorithm.
-    -   **`acluster.cpp`** / **`acluster.h`**: The main implementation of our **ACluster** algorithm.
-    -   **`cluster_encoder_logic.cpp`** / **`cluster_encoder_logic.h`**: Contains the shared logic for both KCluster and ACluster, including residual calculation and data serialization/deserialization.
-    -   **`cluster_common.h`**: Defines the common data structures and constants used across our cluster-based methods.
-
--   **`encoding_benchmark/main.cpp`**: The main entry point of the benchmark program, which orchestrates the experiments and performance measurements.
-
-## Artifact Evaluation: Building and Running Experiments
-
-This repository provides a standalone C++ environment for building the project and reproducing the key performance results presented in our paper.
-
-### Environment & Dependencies
-
-To build and run the code in this repository, you will need the following environment:
-
-- **C++ Compiler**: A C++17 compliant compiler is required. The experiments in our paper were conducted using:
-  - **MinGW-w64 GCC version 15.2.0** on Windows 11.
-  - Other modern compilers like `g++` on Linux or `Clang` on macOS should also be compatible.
-
-- **Build System (Optional but Recommended)**:
-  - **CMake (version 3.10 or higher)**: The project includes a `CMakeLists.txt` file for easy cross-platform building.
-  - **Make** (or an equivalent build tool like Ninja).
-
-### How to Build
-
-This project is configured for building with CMake. The following instructions are tailored for a **Windows environment using MinGW-w64 and CMake**. Users on other platforms (e.g., Linux or macOS) may need to adjust the generator (`-G`) flag or use the default build system.
-
-1.  **Clone the repository:**
-    ```shell
-    git clone https://github.com/SamM755/ACluster.git
-    cd ACluster/encoding_benchmark
-    ```
-
-2.  **Create a build directory:**
-    ```shell
-    mkdir build
-    cd build
-    ```
-
-3.  **Run CMake and build the project:**
-    ```shell
-    # Generate build files
-    cmake -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release ..
-    
-    # Compile the source code
-    cmake --build .
-    ```
-    On Windows with MinGW, you might use `mingw32-make` instead of `make`.
-
-    After a successful build, an executable (e.g., `benchmark`) will be created in the `build` directory.
-
-### How to Run
-
-The main entry point for testing is the `benchmark` executable. You can run it from the `build` directory:
-
-```shell
-# From within the 'build' directory
-./benchmark
+```bash
+cd encoding_benchmark
+python data/select_columns.py
 ```
 
-This will execute the pre-configured performance tests on the datasets included in the repository. The output will display the compression ratio, encoding time, and decoding time for each method, mirroring the results presented in our paper.
+The paper evaluates 12 datasets. This anonymous repository includes the nine publicly distributable datasets and omits TY, GW, and BX. The experiment entry points are unchanged, but aggregate results produced by this repository cover only the public subset.
 
-### Reproducing Experimental Results
+The two BT files larger than 100 MiB are stored with Git LFS. After cloning, install Git LFS and retrieve them with `git lfs install` followed by `git lfs pull`.
 
-The main source file (e.g., `main.cpp` or `benchmark.cpp`) is pre-configured with the experimental setups described in our paper. By examining this file, you can see how different methods (KCluster, ACluster) and datasets are tested. To reproduce specific results, you can modify the main function to run only the desired tests, following the parameters detailed in the paper's **"Experimental Setup"** section.
+## Build
 
-#### Mapping Execution Functions to Paper Figures
+Use MSYS2 MINGW64:
 
-Below is the explicit mapping between the functions in `main.cpp` and the experimental results presented in the manuscript:
+```bash
+cd /d/path/to/ACluster/encoding_benchmark
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
 
-*   **Figures 6, 7, 8, & 9 (Overall Performance Analysis: Compression Ratio, Encoding/Decoding Time):**
-    Run the core loop in `main()` iterating through the datasets using `NoneCompressor` as the secondary strategy. This will execute:
-    *   `run_columnar_encoder_test<...>` (for Chimp, Elf, Gorilla, RLE, Huffman, ALP)
-    *   `run_multidim_reger_test` (for REGER)
-    *   `run_cluster_encoder_test<...>` (for our KCluster and ACluster)
-    *(Outputs are logged to `output/benchmark_results.csv` for easy plotting).*
+## Run
 
-*   **Figures 14, 15, & 16 (Complementation to General Compression - e.g., +GZIP):**
-    In the `main()` function, change the strategy vector to use `GzipCompressor` (i.e., `std::vector<SecondaryCompressor*> strategies = { &gzip_comp };`). Running the core loop will reproduce the results combined with GZIP.
+Every experiment defaults to 100 measured runs and reports averages:
 
-*   **Figure 13 (Impact of Parameter $K$ on KCluster):**
-    Uncomment and execute the `run_k_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates $K \in \{10, 50, 100, 500, 1000\}$ on multi-dimensional datasets.
+```bash
+cd build
+./benchmark.exe
+```
 
-*   **Figure 18 (Pack Size Evaluation):**
-    Uncomment and execute the `run_pack_size_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates pack sizes ranging from 1 to 256.
+Running without arguments is equivalent to `--experiment all`. A one-run smoke test can be selected without changing the source:
 
-*   **Figure 19 (System Page Size Evaluation):**
-    Uncomment and execute the `run_page_size_sensitivity_experiment(fileRoot, outputDir);` function. This evaluates system page sizes from 1,000 to 20,000.
+```bash
+./benchmark.exe --experiment baseline --runs 1 --dataset SSD
+```
 
+Use `--data-root`, `--output-root`, and `--dataset` to override the defaults. Dataset names are case-sensitive. Results are written as CSV files under the output root.
 
-### System Deployment in IoTDB and TsFile
+## Experiment Entry Points
 
-The core algorithms presented in our paper are not just theoretical; they have been fully implemented and integrated into Apache TsFile and Apache IoTDB projects. 
-This ensures their robustness, scalability, and availability to the wider data management community.
+The paper mapping below follows the figure and table numbers in the compiled manuscript. Figures 6 and 7 are the primary encoding-baseline comparison.
 
--   **Apache TsFile Implementation:** 
-    -   **Link:** [https://github.com/apache/tsfile/tree/research/cluster-compress](https://github.com/apache/tsfile/tree/research/cluster-compress) 
+| Entry | Command | Scope | Paper mapping | Main output |
+|---|---|---|---|---|
+| All experiments | `./benchmark.exe` | Runs every entry listed below | Orchestration only | `output/*` |
+| Encoding baselines | `./benchmark.exe --experiment baseline` | Compression ratio and encoding/decoding time across Chimp, Elf, Gorilla, RLE, Huffman, ALP, REGER, Vortex, KCluster, and ACluster | Figures 6-7 (primary); Figures 9 and 13 use the same measurements | `output/baseline/results.csv` |
+| Dimensionality | `./benchmark.exe --experiment dimensionality` | Evaluates increasing prefixes of the selected dimensions | Figure 8 | `output/dimensionality/dimensionality_raw_results.csv` |
+| Order | `./benchmark.exe --experiment order` | Original order, random shuffling, and sorting by the first column | Table 2 | `output/order/results.csv` |
+| One-dimensional special case | `./benchmark.exe --experiment rebuttal-1d` | Reproduces the SSD, BC, PI, and WS ACluster regression results | Figure 10 | `output/rebuttal_1d/results.csv` |
+| Encoding components | `./benchmark.exe --experiment components` | Encoding-time and encoded-space breakdown for KCluster and ACluster | Figure 11 | `output/components/results.csv` |
+| Outliers | `./benchmark.exe --experiment outlier` | ACluster under 0%, 0.1%, 0.5%, 1%, and 5% injected outliers | Table 4 | `output/outlier/results.csv` |
+| KMeans comparison | `./benchmark.exe --experiment kmeans` | KCluster and ACluster compared with Euclidean KMeans encoding | Table 5 | `output/kmeans/results.csv` |
+| Peak memory | `./benchmark.exe --experiment memory` | Peak encoding-memory comparison across all methods | Table 7 | `output/memory/memory_average.csv` |
+| GZIP composition | `./benchmark.exe --experiment gzip` | Every supported encoding method followed by GZIP | Figure 14 | `output/gzip/results.csv` |
+| Parameter sensitivity | `./benchmark.exe --experiment sensitivity` | KCluster `K`, page size, and pack size; ACluster page size and pack size | Not currently assigned a numbered paper result | `output/sensitivity/results.csv` |
+| Reference comparison | `./benchmark.exe --experiment reference` | Adaptive ACluster references versus KCluster with fixed `K` values | Not currently assigned a numbered paper result | `output/reference/results.csv` |
+| Subspace grouping | `./benchmark.exe --experiment subspace` | Full-space KCluster/ACluster versus grouped-dimension KClusterSub | Not currently assigned a numbered paper result | `output/subspace/subspace_group_raw_results.csv` |
 
--   **Apache IoTDB Implementation:** 
-    -   **Link:** [https://github.com/apache/iotdb/tree/research/cluster-compress](https://github.com/apache/iotdb/tree/research/cluster-compress) 
+The adjacent-cluster-scope experiment reported in Table 6 is intentionally not included because it requires changing ACluster's internal comparison scope.
+
+## Common Examples
+
+Run the primary paper experiment on all included public datasets:
+
+```bash
+./benchmark.exe --experiment baseline
+```
+
+Run the order experiment on one dataset:
+
+```bash
+./benchmark.exe --experiment order --dataset CT
+```
+
+Run the full suite once as a smoke test and write results to a separate directory:
+
+```bash
+./benchmark.exe --experiment all --runs 1 --output-root smoke_output
+```

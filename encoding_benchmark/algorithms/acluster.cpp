@@ -20,26 +20,24 @@ namespace ClusterLogic {
         const std::vector<uint8_t>& compressed_data
     );
 
-    ClusteringResult adaptiveGreedyBasePointSelection(const SoAData<long long>& page_data, int dim, int adjacent_reference);
+    ClusteringResult adaptiveGreedyBasePointSelection(const SoAData<long long>& page_data, int dim);
 
 } // namespace ClusterLogic
 
 std::pair<std::vector<uint8_t>, GlobalDiagnostics> ACluster::encode_multidim_with_diag(
     const std::string& csv_file_path, int& dim,
     int k, // k is ignored
-    int page_size, int pack_size, int block_size,
-    int adjacent_reference) 
+    int page_size, int pack_size, int block_size)
 {
     return ClusterLogic::encode_multidim_impl_with_diag(
-        csv_file_path, dim, "ACluster", k, pack_size, block_size, page_size, adjacent_reference
+        csv_file_path, dim, "ACluster", k, pack_size, block_size, page_size
     );
 }
 
 std::vector<uint8_t> ACluster::encode_multidim(
     const std::string& csv_file_path, int& dim,
     int k, // This k will be ignored
-    int page_size, int pack_size, int block_size,
-    int adjacent_reference
+    int page_size, int pack_size, int block_size
 ) {
     // original version
     // auto acluster_strategy = [](const SoAData<long long>& data, int dummy_k, int dim_val) {
@@ -53,7 +51,7 @@ std::vector<uint8_t> ACluster::encode_multidim(
 
 
     // diagonistic verion
-    return encode_multidim_with_diag(csv_file_path, dim, k, page_size, pack_size, block_size, adjacent_reference).first;
+    return encode_multidim_with_diag(csv_file_path, dim, k, page_size, pack_size, block_size).first;
 }
 
 std::vector<std::vector<double>> ACluster::decode_multidim(const std::vector<uint8_t>& compressed_data) {
