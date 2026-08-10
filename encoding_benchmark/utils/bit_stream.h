@@ -13,9 +13,9 @@ public:
     void write_bits(uint64_t value, int num_bits);
 
     const std::vector<uint8_t>& get_buffer() const;
-    std::vector<uint8_t> get_bytes(); 
+    std::vector<uint8_t> get_bytes();
     size_t get_byte_count() const;
-    int get_bit_position() const { return bit_position_; } 
+    int get_bit_position() const { return bit_position_; }
 
     void write_bits_padded(uint64_t value, int bits);
     void write_unsigned_varint(uint32_t value);
@@ -48,4 +48,4 @@ private:
     int bit_position_;
 };
 
-#endif // BIT_STREAM_H
+#endif

@@ -1,0 +1,70 @@
+# name: test/sql/cluster/cluster_hybrid.test
+# description: Full-row Cluster+ALP files preserve non-selected columns and duplicates
+# group: [cluster]
+
+require cluster
+
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE original AS SELECT ((i*37)%7)::DOUBLE a, (i%997)::DOUBLE/100 b, ((i*37)%7)::DOUBLE*2 c, CASE WHEN i=2 THEN '-0.0'::DOUBLE ELSE (i%997)::DOUBLE END d FROM range(1037) t(i);
+
+statement ok
+CREATE VIEW expected AS SELECT cluster_bits(a) a, cluster_bits(b) b, cluster_bits(c) c, cluster_bits(d) d FROM original;
+
+foreach method acluster_alp kcluster_alp
+
+statement ok
+COPY original TO '{TEST_DIR}/full_{method}.cluster' (FORMAT cluster, METHOD '{method}', CLUSTER_COLUMNS '2,0', PAGE_SIZE 1024, K 8, COMPRESSION 'zstd');
+
+statement ok
+CREATE OR REPLACE VIEW actual AS SELECT cluster_bits(a) a, cluster_bits(b) b, cluster_bits(c) c, cluster_bits(d) d FROM read_cluster('{TEST_DIR}/full_{method}.cluster');
+
+query I
+SELECT count(*) FROM ((FROM expected EXCEPT ALL FROM actual) UNION ALL (FROM actual EXCEPT ALL FROM expected));
+----
+0
+
+query I
+SELECT count(*) > 0 FROM cluster_metadata('{TEST_DIR}/full_{method}.cluster') WHERE mode='{method}';
+----
+true
+
+query III
+SELECT count(*), sum(rows), min(rows) FROM cluster_metadata('{TEST_DIR}/full_{method}.cluster');
+----
+2	1037	13
+
+endloop
+
+statement ok
+COPY original TO '{TEST_DIR}/full_alp.cluster' (FORMAT cluster, METHOD 'alp', PAGE_SIZE 1024, COMPRESSION 'zstd');
+
+statement ok
+CREATE OR REPLACE VIEW actual AS SELECT cluster_bits(a) a, cluster_bits(b) b, cluster_bits(c) c, cluster_bits(d) d FROM read_cluster('{TEST_DIR}/full_alp.cluster');
+
+query I
+SELECT count(*) FROM ((FROM expected EXCEPT ALL FROM actual) UNION ALL (FROM actual EXCEPT ALL FROM expected));
+----
+0
+
+statement error
+COPY original TO '{TEST_DIR}/missing_columns.cluster' (FORMAT cluster, METHOD 'acluster_alp');
+----
+CLUSTER_COLUMNS is required
+
+statement error
+COPY original TO '{TEST_DIR}/duplicate_columns.cluster' (FORMAT cluster, METHOD 'kcluster_alp', CLUSTER_COLUMNS '1,1');
+----
+Invalid or duplicate
+
+statement error
+COPY original TO '{TEST_DIR}/out_of_range.cluster' (FORMAT cluster, METHOD 'kcluster_alp', CLUSTER_COLUMNS '4');
+----
+Invalid or duplicate
+
+statement error
+COPY original TO '{TEST_DIR}/unexpected_columns.cluster' (FORMAT cluster, METHOD 'alp', CLUSTER_COLUMNS '1');
+----
+CLUSTER_COLUMNS is required only

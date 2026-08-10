@@ -12,4 +12,4 @@ public:
     std::string get_name() const { return "Chimp"; }
 };
 
-#endif // CHIMP_H
+#endif

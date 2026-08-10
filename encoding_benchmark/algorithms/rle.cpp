@@ -1,5 +1,3 @@
-// in algorithms/rle.cpp
-
 #include "rle.h"
 #include "../utils/bit_stream.h"
 #include "../utils/type_converter.h"
@@ -10,14 +8,7 @@
 #include <algorithm>
 #include <numeric>
 
-
-
-
-namespace { // Anonymous namespace
-
-// =====================================================================================
-//                 PRE-PROCESSING: Double <-> Scaled Int64
-// =====================================================================================
+namespace {
 
 struct ScalingResult {
     std::vector<int64_t> scaled_data;
@@ -67,7 +58,7 @@ public:
     void pack8Values(const std::vector<int64_t>& in_buf, int offset, std::vector<uint8_t>& out_buf) {
         uint64_t temp[8];
         for (int i = 0; i < 8; i++) temp[i] = static_cast<uint64_t>(in_buf[offset + i]);
-        
+
         out_buf.assign(bit_width, 0);
         for (int i = 0; i < bit_width; i++) {
             out_buf[i] = (uint8_t)(
@@ -101,17 +92,13 @@ private:
     }
 };
 
-// =====================================================================================
-//                 TSFile-style RLE/Bit-Packing Encoder
-// =====================================================================================
 class RleEncoderImpl {
 private:
     static constexpr int RLE_MIN_REPEATED_NUM = 8;
     int bit_width;
     LongPacker packer;
 
-    // State machine variables
-    std::vector<int64_t> buffered_values; // For bit-packing
+    std::vector<int64_t> buffered_values;
     int num_buffered_values;
     int64_t pre_value;
     int repeat_count;
@@ -126,7 +113,7 @@ private:
     void convertBuffer(OutputBitStream& out) {
         std::vector<uint8_t> bytes(bit_width);
         packer.pack8Values(buffered_values, 0, bytes);
-        
+
         out.write_unsigned_varint((RLE_MIN_REPEATED_NUM << 1) | 1);
         for(uint8_t byte : bytes) {
             out.write_bits(byte, 8);
@@ -146,11 +133,10 @@ public:
     {
         buffered_values.resize(RLE_MIN_REPEATED_NUM, 0);
     }
-    
-    // This is the precise C++ translation of RleEncoder.encodeValue(T value)
+
     void encode(int64_t value, OutputBitStream& out) {
         if (repeat_count == 0 && num_buffered_values == 0) {
-            // First value
+
             pre_value = value;
             repeat_count = 1;
             return;
@@ -159,8 +145,7 @@ public:
         if (value == pre_value) {
             repeat_count++;
             if (repeat_count == RLE_MIN_REPEATED_NUM) {
-                // We have a full RLE run starting. If there were any
-                // previous values in the bit-pack buffer, write them out first.
+
                 if (num_buffered_values > 0) {
                      out.write_unsigned_varint((num_buffered_values << 1) | 1);
                      for(int i=0; i<num_buffered_values; ++i) write_little_endian(out, buffered_values[i], (bit_width+7)/8);
@@ -168,12 +153,12 @@ public:
                 num_buffered_values = 0;
             }
         } else {
-            // New value arrived. Handle the previous sequence.
+
             if (repeat_count >= RLE_MIN_REPEATED_NUM) {
-                // Previous sequence was a long RLE run
+
                 writeRleRun(out);
             } else {
-                // Previous sequence was a short run, treat as bit-packed
+
                 for(int i = 0; i < repeat_count; ++i) {
                     buffered_values[num_buffered_values++] = pre_value;
                     if (num_buffered_values == RLE_MIN_REPEATED_NUM) {
@@ -181,17 +166,17 @@ public:
                     }
                 }
             }
-            // Start new sequence with the current value
+
             pre_value = value;
             repeat_count = 1;
         }
     }
-    
+
     void flush(OutputBitStream& out) {
         if (repeat_count >= RLE_MIN_REPEATED_NUM) {
             writeRleRun(out);
         } else if (repeat_count > 0) {
-            // Not a long enough run, so add the repeated values to the buffer
+
              for(int i = 0; i < repeat_count; ++i) {
                 buffered_values[num_buffered_values++] = pre_value;
                 if (num_buffered_values == RLE_MIN_REPEATED_NUM) {
@@ -199,8 +184,7 @@ public:
                 }
             }
         }
-        
-        // Write any remaining values in the bit-packing buffer
+
         if (num_buffered_values > 0) {
             out.write_unsigned_varint((num_buffered_values << 1) | 1);
             for (int i = 0; i < num_buffered_values; ++i) {
@@ -228,7 +212,7 @@ private:
         uint32_t header = in.read_unsigned_varint();
         mode = ((header & 1) == 0) ? RLE : BIT_PACKED;
         current_count = header >> 1;
-        
+
         if (mode == RLE) {
             rle_value = read_little_endian((bit_width + 7) / 8);
         } else {
@@ -257,7 +241,7 @@ private:
     }
 
 public:
-    RleDecoderImpl(InputBitStream& stream, int width) 
+    RleDecoderImpl(InputBitStream& stream, int width)
         : in(stream), bit_width(width), current_count(0), bit_packed_idx(0), packer(width) {}
 
     int64_t read() {
@@ -272,9 +256,6 @@ public:
 };
 }
 
-// =====================================================================================
-//                                  Public Rle Class
-// =====================================================================================
 std::vector<uint8_t> Rle::encode(const std::vector<double>& data) {
     if (data.empty()) return {};
     ScalingResult scaling_res = scale_doubles(data);
@@ -289,7 +270,7 @@ std::vector<uint8_t> Rle::encode(const std::vector<double>& data) {
     out.write_bits(double_to_long(scaling_res.scaling_factor), 64);
     out.write_bits(bit_width, 8);
     out.write_bits(data.size(), 32);
-    
+
     RleEncoderImpl encoder(bit_width);
     if (!scaled_data.empty()) {
         for (int64_t val : scaled_data) {
@@ -298,7 +279,7 @@ std::vector<uint8_t> Rle::encode(const std::vector<double>& data) {
         }
         encoder.flush(out);
     }
-    
+
     return out.get_bytes();
 }
 
@@ -308,12 +289,12 @@ std::vector<double> Rle::decode(const std::vector<uint8_t>& compressed_data) {
     double scaling_factor = long_to_double(in.read_bits(64));
     int bit_width = in.read_bits(8);
     uint32_t num_values = in.read_bits(32);
-    
+
     std::vector<double> decoded_values;
     decoded_values.reserve(num_values);
-    
+
     RleDecoderImpl decoder(in, bit_width);
-    
+
     for (uint32_t i = 0; i < num_values; ++i) {
         uint64_t zigzag_val = decoder.read();
         int64_t scaled_val = (zigzag_val >> 1) ^ (-(zigzag_val & 1));

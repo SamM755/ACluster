@@ -1,0 +1,181 @@
+# name: test/sql/cluster/cluster_roundtrip.test
+# description: Cluster file COPY and bitwise complete-tuple round trips
+# group: [cluster]
+
+require cluster
+
+statement ok
+SET threads=1;
+
+statement ok
+CREATE TABLE original AS SELECT (i%17)::DOUBLE*0.25 AS a, (i%11)::DOUBLE-5 AS b, (i%7)::DOUBLE*2 AS c FROM range(20037) t(i);
+
+statement ok
+COPY original TO '{TEST_DIR}/roundtrip_a.cluster' (FORMAT cluster, METHOD 'acluster', PAGE_SIZE 10000);
+
+statement ok
+COPY original TO '{TEST_DIR}/roundtrip_k.cluster' (FORMAT cluster, METHOD 'kcluster', K 16, PAGE_SIZE 10000, SEED 42);
+
+statement ok
+CREATE VIEW expected AS SELECT cluster_bits(a) a, cluster_bits(b) b, cluster_bits(c) c FROM original;
+
+foreach method a k
+
+statement ok
+CREATE OR REPLACE VIEW actual AS SELECT cluster_bits(a) a, cluster_bits(b) b, cluster_bits(c) c FROM read_cluster('{TEST_DIR}/roundtrip_{method}.cluster');
+
+query I
+SELECT count(*) FROM ((FROM expected EXCEPT ALL FROM actual) UNION ALL (FROM actual EXCEPT ALL FROM expected));
+----
+0
+
+query III
+SELECT count(*), sum(rows), min(rows) FROM cluster_metadata('{TEST_DIR}/roundtrip_{method}.cluster');
+----
+3	20037	37
+
+query I
+SELECT count(*) > 0 FROM cluster_metadata('{TEST_DIR}/roundtrip_{method}.cluster') WHERE mode <> 'raw';
+----
+true
+
+query I
+SELECT (SELECT sum(b) FROM original WHERE a>1) = (SELECT sum(b) FROM read_cluster('{TEST_DIR}/roundtrip_{method}.cluster') WHERE a>1);
+----
+true
+
+endloop
+
+statement ok
+CREATE TABLE precise AS SELECT CASE WHEN i=1 THEN '-0.0'::DOUBLE WHEN i=2 THEN 1e-200::DOUBLE WHEN i=3 THEN 0.12345678901234567::DOUBLE ELSE 12.5::DOUBLE END AS x FROM range(1000) t(i);
+
+foreach method acluster kcluster
+
+statement ok
+COPY precise TO '{TEST_DIR}/precise_{method}.cluster' (FORMAT cluster, METHOD '{method}', K 8);
+
+query I
+SELECT count(*) FROM ((SELECT cluster_bits(x) FROM precise EXCEPT ALL SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/precise_{method}.cluster')) UNION ALL (SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/precise_{method}.cluster') EXCEPT ALL SELECT cluster_bits(x) FROM precise));
+----
+0
+
+query I
+SELECT count(*) FROM cluster_metadata('{TEST_DIR}/precise_{method}.cluster') WHERE mode='{method}' AND corrections>0;
+----
+1
+
+endloop
+
+statement ok
+COPY (SELECT 1::DOUBLE x WHERE false) TO '{TEST_DIR}/empty.cluster' (FORMAT cluster);
+
+query I
+SELECT count(*) FROM read_cluster('{TEST_DIR}/empty.cluster');
+----
+0
+
+statement ok
+CREATE TABLE special AS SELECT * FROM (VALUES (NULL::DOUBLE), ('NaN'::DOUBLE), ('Infinity'::DOUBLE), ('-Infinity'::DOUBLE), ('-0.0'::DOUBLE), (1e200::DOUBLE)) t(x);
+
+statement ok
+COPY special TO '{TEST_DIR}/special.cluster' (FORMAT cluster, METHOD 'kcluster', PAGE_SIZE 1);
+
+query I
+SELECT count(*) FROM ((SELECT cluster_bits(x) FROM special EXCEPT ALL SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/special.cluster')) UNION ALL (SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/special.cluster') EXCEPT ALL SELECT cluster_bits(x) FROM special));
+----
+0
+
+query I
+SELECT count(*) FROM cluster_metadata('{TEST_DIR}/special.cluster') WHERE mode='raw';
+----
+6
+
+statement error
+COPY (SELECT 1::BIGINT x) TO '{TEST_DIR}/badtype.cluster' (FORMAT cluster);
+----
+requires DOUBLE
+
+statement error
+COPY original TO '{TEST_DIR}/badoption.cluster' (FORMAT cluster, PAGE_SIZE 10001);
+----
+Invalid cluster
+
+statement error
+COPY original TO '{TEST_DIR}/badmethod.cluster' (FORMAT cluster, METHOD 'other');
+----
+Unknown cluster METHOD
+
+statement error
+SELECT * FROM read_cluster(NULL);
+----
+path cannot be NULL
+
+statement ok
+SET threads=4;
+
+statement ok
+COPY original TO '{TEST_DIR}/parallel_input.cluster' (FORMAT cluster, METHOD 'kcluster', K 8, PAGE_SIZE 257);
+
+query I
+SELECT count(*) FROM ((SELECT a,b,c FROM original EXCEPT ALL SELECT a,b,c FROM read_cluster('{TEST_DIR}/parallel_input.cluster')) UNION ALL (SELECT a,b,c FROM read_cluster('{TEST_DIR}/parallel_input.cluster') EXCEPT ALL SELECT a,b,c FROM original));
+----
+0
+
+statement ok
+SET threads=1;
+
+foreach method raw acluster kcluster
+
+statement ok
+COPY original TO '{TEST_DIR}/zstd_{method}.cluster' (FORMAT cluster, METHOD '{method}', COMPRESSION zstd, COMPRESSION_LEVEL 3, K 16);
+
+query I
+SELECT count(*) FROM ((FROM expected EXCEPT ALL SELECT cluster_bits(a),cluster_bits(b),cluster_bits(c) FROM read_cluster('{TEST_DIR}/zstd_{method}.cluster')) UNION ALL (SELECT cluster_bits(a),cluster_bits(b),cluster_bits(c) FROM read_cluster('{TEST_DIR}/zstd_{method}.cluster') EXCEPT ALL FROM expected));
+----
+0
+
+query III
+SELECT count(*),sum(rows),min(compression_level) FROM cluster_metadata('{TEST_DIR}/zstd_{method}.cluster') WHERE compression='zstd';
+----
+3	20037	3
+
+query I
+SELECT sum(page_bytes)<sum(codec_page_bytes) FROM cluster_metadata('{TEST_DIR}/zstd_{method}.cluster');
+----
+true
+
+statement ok
+COPY special TO '{TEST_DIR}/zstd_special_{method}.cluster' (FORMAT cluster, METHOD '{method}', COMPRESSION zstd, PAGE_SIZE 1);
+
+query I
+SELECT count(*) FROM ((SELECT cluster_bits(x) FROM special EXCEPT ALL SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/zstd_special_{method}.cluster')) UNION ALL (SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/zstd_special_{method}.cluster') EXCEPT ALL SELECT cluster_bits(x) FROM special));
+----
+0
+
+endloop
+
+statement ok
+COPY precise TO '{TEST_DIR}/zstd_precise.cluster' (FORMAT cluster, METHOD acluster, COMPRESSION zstd);
+
+query I
+SELECT count(*) FROM ((SELECT cluster_bits(x) FROM precise EXCEPT ALL SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/zstd_precise.cluster')) UNION ALL (SELECT cluster_bits(x) FROM read_cluster('{TEST_DIR}/zstd_precise.cluster') EXCEPT ALL SELECT cluster_bits(x) FROM precise));
+----
+0
+
+statement ok
+COPY (SELECT 1::DOUBLE x WHERE false) TO '{TEST_DIR}/zstd_empty.cluster' (FORMAT cluster, COMPRESSION zstd);
+
+query I
+SELECT count(*) FROM read_cluster('{TEST_DIR}/zstd_empty.cluster');
+----
+0
+
+statement error
+COPY original TO '{TEST_DIR}/badcompression.cluster' (FORMAT cluster, COMPRESSION gzip);
+----
+COMPRESSION must
+
+statement error
+COPY original TO '{TEST_DIR}/badlevel.cluster' (FORMAT cluster, COMPRESSION zstd, COMPRESSION_LEVEL 23);
+----
+COMPRESSION_LEVEL must

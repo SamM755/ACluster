@@ -5,8 +5,7 @@
 #include <iomanip>
 #include <bitset>
 
-constexpr bool DEBUG_ENABLED = false; 
-
+constexpr bool DEBUG_ENABLED = false;
 
 #define DEBUG_LOG(x) \
     do { \
@@ -14,7 +13,6 @@ constexpr bool DEBUG_ENABLED = false;
             std::cout << "[DEBUG] " << x << std::endl; \
         } \
     } while (0)
-
 
 #define DEBUG_BITS(action, value, num_bits) \
     do { \
@@ -27,4 +25,4 @@ constexpr bool DEBUG_ENABLED = false;
         } \
     } while (0)
 
-#endif // DEBUG_H
+#endif

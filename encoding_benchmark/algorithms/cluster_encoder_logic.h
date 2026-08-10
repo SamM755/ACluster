@@ -1,5 +1,3 @@
-// in algorithms/cluster_encoder_logic.h
-
 #ifndef CLUSTER_ENCODER_LOGIC_H
 #define CLUSTER_ENCODER_LOGIC_H
 
@@ -12,7 +10,6 @@
 
 namespace ClusterLogic {
 
-// --- Declare BitStreamReader class ---
 class BitStreamReader {
 public:
     explicit BitStreamReader(const std::vector<uint8_t>& data);
@@ -40,7 +37,7 @@ std::pair<std::vector<uint8_t>, GlobalDiagnostics> encode_multidim_impl_with_dia
     const std::string& csv_file_path, int& dim,
     const std::string& algorithm_name,
     int k, int pack_size, int block_size, int page_size
-); 
+);
 
 std::vector<std::vector<double>> decode_multidim_impl(
     const std::vector<uint8_t>& compressed_data
@@ -51,7 +48,6 @@ struct KMedoidResult {
     long long final_cost;
 };
 
-
 struct AClusterResult {
     ClusteringResult result;
     long long final_cost;
@@ -60,20 +56,19 @@ struct AClusterResult {
 KMedoidResult kMedoidLogCost_with_diag(const SoAData<long long>& data, int k, int max_iter, double tol, int dim);
 AClusterResult adaptiveGreedyBasePointSelection_with_diag(const SoAData<long long>& page_data, int dim);
 
-
 ClusteringResult kMedoidLogCost(
-    const SoAData<long long>& data, 
-    int k, 
-    int max_iter, 
-    double tol, 
+    const SoAData<long long>& data,
+    int k,
+    int max_iter,
+    double tol,
     int dim
 );
 
 ClusteringResult adaptiveGreedyBasePointSelection(
-    const SoAData<long long>& page_data, 
+    const SoAData<long long>& page_data,
     int dim
 );
 
-} // namespace ClusterLogic
+}
 
-#endif // CLUSTER_ENCODER_LOGIC_H
+#endif

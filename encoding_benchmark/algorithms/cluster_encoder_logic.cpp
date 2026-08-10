@@ -1,3 +1,7 @@
+#ifdef ACLUSTER_BUFFER_EXPERIMENT
+#include "experiment_hook.h"
+static size_t experimentEncodedBits = 0;
+#endif
 #include "cluster_common.h"
 #include "cluster_encoder_logic.h"
 #include <functional>
@@ -14,11 +18,10 @@
 #include <set>
 #include <unordered_set>
 #include <map>
-#include <iostream> // For debug
-#include <iomanip>  // For debug
+#include <iostream>
+#include <iomanip>
 #include <stdexcept>
 #include <fstream>
-
 
 namespace {
 namespace GlobalDebug {
@@ -32,7 +35,7 @@ namespace ClusterLogic {
 struct BitBuffer {
     std::vector<uint8_t> buffer;
     size_t currentBitPos = 0;
-    
+
     void appendBit(bool bit) {
         size_t byteIndex = currentBitPos / 8;
         int bitIndexInByte = currentBitPos % 8;
@@ -49,7 +52,7 @@ struct BitBuffer {
             appendBit(bit);
         }
     }
-    
+
     std::vector<uint8_t> toByteArray() const { return buffer; }
     size_t size() const { return currentBitPos; }
 };
@@ -64,12 +67,11 @@ namespace BitBufferUtils {
         #if defined(__GNUC__) || defined(__clang__)
         return 64 - __builtin_clzll(u_value);
         #else
-        // Fallback for MSVC or other compilers
+
         int length = 0; while(u_value > 0){ u_value >>= 1; length++; } return length == 0 ? 1 : length;
         #endif
     }
 }
-
 
 BitStreamReader::BitStreamReader(const std::vector<uint8_t>& data)
     : buffer(data), bufferSize(data.size()), currentBitPos(0) {}
@@ -77,7 +79,7 @@ BitStreamReader::BitStreamReader(const std::vector<uint8_t>& data)
 long long BitStreamReader::readBits(int numBits) {
     if (numBits < 0 || numBits > 64) throw std::invalid_argument("Cannot read " + std::to_string(numBits) + " bits.");
     if (currentBitPos + numBits > bufferSize * 8) throw std::out_of_range("Not enough bits in stream to read " + std::to_string(numBits) + " bits.");
-    
+
     long long value = 0;
     for (int i = 0; i < numBits; ++i) {
         size_t byteIndex = currentBitPos / 8;
@@ -89,15 +91,14 @@ long long BitStreamReader::readBits(int numBits) {
     return value;
 }
 
-
-namespace { // Anonymous helpers for Preprocessor
+namespace {
     void parse_csv_line(const std::string& line, std::vector<std::string>& cells) {
         std::stringstream line_stream(line);
         std::string cell;
         cells.clear();
         while (std::getline(line_stream, cell, ',')) cells.push_back(cell);
     }
-    
+
     long long stringToLong(const std::string& s, int decimal_places_to_scale) {
         if (s.empty()) {
             return 0;
@@ -131,7 +132,7 @@ namespace { // Anonymous helpers for Preprocessor
                         fractional_part_str = fractional_part_str.substr(0, 18);
                     }
                     frac_val = std::stoll(fractional_part_str);
-                    
+
                     int frac_len = fractional_part_str.length();
                     for (int i = 0; i < decimal_places_to_scale - frac_len; ++i) {
                         frac_val *= 10;
@@ -141,20 +142,20 @@ namespace { // Anonymous helpers for Preprocessor
                     }
                 }
             }
-            
+
             long long total_abs_val = int_val;
             for (int i = 0; i < decimal_places_to_scale; ++i) {
                 if (total_abs_val > std::numeric_limits<long long>::max() / 10) {
-                    total_abs_val = std::numeric_limits<long long>::max(); 
+                    total_abs_val = std::numeric_limits<long long>::max();
                     break;
                 }
                 total_abs_val *= 10;
             }
-            
+
             if (total_abs_val <= std::numeric_limits<long long>::max() - frac_val) {
                 total_abs_val += frac_val;
             } else {
-                total_abs_val = std::numeric_limits<long long>::max(); 
+                total_abs_val = std::numeric_limits<long long>::max();
             }
             return is_negative ? -total_abs_val : total_abs_val;
         } catch (const std::exception& e) {
@@ -214,7 +215,6 @@ PreprocessorResult preprocessPageFromStrings(const std::vector<std::string>& csv
     return {std::move(integerSoA), max_decimal_places, minValues};
 }
 
-
 namespace{
     inline int bitLength(long long value) {
         if (value == 0) return 1;
@@ -247,7 +247,6 @@ namespace{
         return sum;
     }
 
-    // Helper to get a point (row) from SoA data as an AoS vector.
     std::vector<long long> get_point_from_soa(const SoAData<long long>& soa_data, int row_idx) {
         std::vector<long long> point(soa_data.dim);
         for (int d = 0; d < soa_data.dim; ++d) {
@@ -268,18 +267,16 @@ namespace{
         std::vector<std::vector<long long>> medoids;
         if (data.num_rows == 0 || k <= 0) return medoids;
         medoids.reserve(k);
-        
-        // Use a set of vectors to ensure VALUE uniqueness, just like Java's Set<String>
+
         std::unordered_set<std::vector<long long>, VectorHasher> selected_medoids_set;
 
         std::uniform_int_distribution<> distrib(0, data.num_rows - 1);
-        
-        // Find the first medoid
+
         int first_index = distrib(gen);
         auto first_medoid = get_point_from_soa(data, first_index);
         medoids.push_back(first_medoid);
         selected_medoids_set.insert(first_medoid);
-        
+
         std::vector<long long> distances(data.num_rows);
         for (int i = 0; i < data.num_rows; ++i) {
             distances[i] = manhattanDistance(get_point_from_soa(data, i), medoids[0]);
@@ -287,7 +284,7 @@ namespace{
 
         for (int i = 1; i < k; ++i) {
             if (selected_medoids_set.size() >= (size_t)data.num_rows) break;
-            
+
             long long total_distance = std::accumulate(distances.begin(), distances.end(), 0LL);
             if (total_distance == 0) {
                 int next_idx = 0;
@@ -299,11 +296,10 @@ namespace{
                 selected_medoids_set.insert(new_medoid);
                 continue;
             }
-            
-            // Weighted random selection
+
             std::uniform_real_distribution<double> dist_double(0.0, (double)total_distance);
             long long rand_val = static_cast<long long>(dist_double(gen));
-            
+
             long long current_sum = 0;
             int chosen_idx = -1;
             for(int j = 0; j < data.num_rows; ++j) {
@@ -315,16 +311,14 @@ namespace{
             }
             if (chosen_idx == -1) chosen_idx = data.num_rows - 1;
 
-            // Linearly probe for the next UNSELECTED VALUE, same as Java
             while(selected_medoids_set.count(get_point_from_soa(data, chosen_idx))) {
                 chosen_idx = (chosen_idx + 1) % data.num_rows;
             }
-            
+
             auto new_medoid = get_point_from_soa(data, chosen_idx);
             medoids.push_back(new_medoid);
             selected_medoids_set.insert(new_medoid);
 
-            // Update distances
             for (int idx = 0; idx < data.num_rows; ++idx) {
                 long long dist_new = manhattanDistance(get_point_from_soa(data, idx), new_medoid);
                 distances[idx] = std::min(distances[idx], dist_new);
@@ -344,14 +338,14 @@ namespace{
         for (int medoidIndex = 0; medoidIndex < k; ++medoidIndex) {
             const auto& member_indices = cluster_point_indices[medoidIndex];
             if (member_indices.empty()) { newMedoids[medoidIndex] = currentMedoids[medoidIndex]; continue; }
-            
+
             long long best_total_cost = std::numeric_limits<long long>::max();
             int best_medoid_candidate_idx_in_data = -1;
 
             for (int candidate_idx_in_data : member_indices) {
                 long long current_total_cost = 0;
                 auto candidate_medoid = get_point_from_soa(data, candidate_idx_in_data);
-                
+
                 for (int member_idx_in_data : member_indices) {
                     if (candidate_idx_in_data == member_idx_in_data) continue;
                     auto other_point = get_point_from_soa(data, member_idx_in_data);
@@ -360,10 +354,6 @@ namespace{
                         current_total_cost += bitLength(residual >= 0 ? residual : -residual) + 1;
                     }
                 }
-
-                // for (int member_idx_in_data : member_indices) {
-                //     current_total_cost += calculateTotalLogCost(candidate_medoid, get_point_from_soa(data, member_idx_in_data), dim);
-                // }
 
                 if (current_total_cost < best_total_cost) {
                     best_total_cost = current_total_cost;
@@ -420,12 +410,10 @@ namespace{
 }
 }
 
-// ablation study version
 KMedoidResult kMedoidLogCost_with_diag(const SoAData<long long>& data, int k, int max_iter, double tol, int dim) {
     int n = data.num_rows;
     if (n == 0) return {{}, 0};
 
-    
     auto aos_data = convert_SoA_to_AoS(data);
     std::sort(aos_data.begin(), aos_data.end());
     auto last = std::unique(aos_data.begin(), aos_data.end());
@@ -436,11 +424,11 @@ KMedoidResult kMedoidLogCost_with_diag(const SoAData<long long>& data, int k, in
     auto medoids = acceleratedInitialization(data, k, gen);
     k = medoids.size();
     if (k==0) return {{}, 0};
-    
+
     std::vector<int> cluster_assignment(n);
     long long previous_total_cost = std::numeric_limits<long long>::max();
-    long long final_total_cost = 0; 
-    
+    long long final_total_cost = 0;
+
     for (int iter = 0; iter < max_iter; ++iter) {
         long long total_cost_this_round = 0;
         for (int i = 0; i < n; ++i) {
@@ -463,20 +451,20 @@ KMedoidResult kMedoidLogCost_with_diag(const SoAData<long long>& data, int k, in
             total_cost_this_round += min_cost;
         }
 
-        final_total_cost = total_cost_this_round; 
+        final_total_cost = total_cost_this_round;
 
         if (iter > 0 && std::abs((double)previous_total_cost - total_cost_this_round) < tol) break;
         previous_total_cost = total_cost_this_round;
-        
+
         auto new_medoids = updateMedoids(data, cluster_assignment, medoids, dim);
         if (medoids == new_medoids) break;
         medoids = new_medoids;
     }
-    
+
     std::vector<long long> cluster_sizes(k, 0);
     for (int assignment : cluster_assignment) { if (assignment != -1 && (size_t)assignment < cluster_sizes.size()) cluster_sizes[assignment]++; }
-    
-    return {sortResults(medoids, cluster_assignment, cluster_sizes), final_total_cost}; 
+
+    return {sortResults(medoids, cluster_assignment, cluster_sizes), final_total_cost};
 }
 
 AClusterResult adaptiveGreedyBasePointSelection_with_diag(const SoAData<long long>& page_data, int dim) {
@@ -545,7 +533,7 @@ AClusterResult adaptiveGreedyBasePointSelection_with_diag(const SoAData<long lon
     auto discovered_medoids = medoids_list;
     std::vector<long long> raw_cluster_sizes(k);
     for (int i = 0; i < k; ++i) { raw_cluster_sizes[i] = points_in_cluster_list[i].size(); }
-    
+
     long long final_total_cost = 0;
     for(size_t i = 0; i < point_to_leader_map.size(); ++i) {
         if(point_to_leader_map[i] != -1) {
@@ -558,8 +546,6 @@ AClusterResult adaptiveGreedyBasePointSelection_with_diag(const SoAData<long lon
     return {sortResults(discovered_medoids, point_to_leader_map, raw_cluster_sizes), final_total_cost};
 }
 
-
-// original version
 ClusteringResult kMedoidLogCost(const SoAData<long long>& data, int k, int max_iter, double tol, int dim) {
     int n = data.num_rows;
     if (n == 0) return {{}, {}, {}};
@@ -573,7 +559,7 @@ ClusteringResult kMedoidLogCost(const SoAData<long long>& data, int k, int max_i
         k = distinctCount;
     }
     if (GlobalDebug::DEBUG_PRINT_ENABLED) {
-        std::cout << "[DEBUG|CLUSTER] Distinct data points: " << distinctCount 
+        std::cout << "[DEBUG|CLUSTER] Distinct data points: " << distinctCount
                   << ". Initial k: " << original_k << ". Adjusted k: " << k << "\n";
     }
 
@@ -581,10 +567,10 @@ ClusteringResult kMedoidLogCost(const SoAData<long long>& data, int k, int max_i
     auto medoids = acceleratedInitialization(data, k, gen);
     k = medoids.size();
     if (k==0) return {};
-    
+
     std::vector<int> cluster_assignment(n);
     long long previous_total_cost = std::numeric_limits<long long>::max();
-    
+
     for (int iter = 0; iter < max_iter; ++iter) {
         long long total_cost_this_round = 0;
         for (int i = 0; i < n; ++i) {
@@ -593,7 +579,7 @@ ClusteringResult kMedoidLogCost(const SoAData<long long>& data, int k, int max_i
             auto current_point = get_point_from_soa(data, i);
             for (int m = 0; m < k; ++m) {
                 long long cost = calculateTotalLogCost(current_point, medoids[m], dim);
-                
+
                 if (cost < min_cost) {
                     min_cost = cost;
                     assigned_medoid_idx = m;
@@ -609,18 +595,17 @@ ClusteringResult kMedoidLogCost(const SoAData<long long>& data, int k, int max_i
         }
         if (iter > 0 && std::abs((double)previous_total_cost - total_cost_this_round) < tol) break;
         previous_total_cost = total_cost_this_round;
-        
+
         auto new_medoids = updateMedoids(data, cluster_assignment, medoids, dim);
         if (medoids == new_medoids) break;
         medoids = new_medoids;
     }
-    
+
     std::vector<long long> cluster_sizes(k, 0);
     for (int assignment : cluster_assignment) { if (assignment != -1 && (size_t)assignment < cluster_sizes.size()) cluster_sizes[assignment]++; }
     return sortResults(medoids, cluster_assignment, cluster_sizes);
 }
 
-// original version
 ClusteringResult adaptiveGreedyBasePointSelection(const SoAData<long long>& page_data, int dim) {
     auto data_aos = convert_SoA_to_AoS(page_data);
     size_t n = data_aos.size();
@@ -690,7 +675,6 @@ ClusteringResult adaptiveGreedyBasePointSelection(const SoAData<long long>& page
     return sortResults(discovered_medoids, point_to_leader_map, raw_cluster_sizes);
 }
 
-
 namespace {
     inline long long zigzagEncode_scalar(long long n) {
         return (n << 1) ^ (n >> 63);
@@ -714,9 +698,9 @@ std::vector<std::vector<long long>> residualCalculationZigzag_sorted(
         writePointers[i] = cumulativeCount;
         cumulativeCount += static_cast<int>(sorted_cluster_sizes[i]);
     }
-    
+
     std::vector<std::vector<long long>> sortedResidualSeries(n, std::vector<long long>(dim));
-    
+
     for (int i = 0; i < n; i++) {
         int clusterId = assignments[i];
         if (clusterId < 0 || static_cast<size_t>(clusterId) >= k) continue;
@@ -732,7 +716,6 @@ std::vector<std::vector<long long>> residualCalculationZigzag_sorted(
     }
     return sortedResidualSeries;
 }
-
 
 struct BasePointsResult {
     std::vector<long long> min_base;
@@ -759,14 +742,9 @@ struct ClusterEncoderPageResult {
     int page_k;
 };
 
-
-
-
-
-
-namespace { // Anonymous helpers for encoding
+namespace {
     BasePointsResult generateBitstreamEncodedBasePointsOptimized(
-        const std::vector<std::vector<long long>>& medoids, int dim) 
+        const std::vector<std::vector<long long>>& medoids, int dim)
     {
         if (medoids.empty()) return {std::vector<long long>(dim, 0), std::vector<int>(dim, 0), BitBuffer()};
         size_t k = medoids.size();
@@ -786,7 +764,7 @@ namespace { // Anonymous helpers for encoding
         return {min_base, max_base_bit_len, base_bitstream};
     }
     BitBuffer generateBitstreamFrequency(
-        const std::vector<long long>& cluster_size, int block_size) 
+        const std::vector<long long>& cluster_size, int block_size)
     {
         if (cluster_size.empty()) return BitBuffer();
         BitBuffer freq_bit, freq_meta;
@@ -837,11 +815,11 @@ namespace { // Anonymous helpers for encoding
     };
     std::vector<uint8_t> assemble_final_bytestream(
         const std::vector<ClusterEncoderPageResult>& page_results,
-        int dim, int pack_size, int block_size, int page_size) 
+        int dim, int pack_size, int block_size, int page_size)
     {
         if (page_results.empty()) return {};
         BitBuffer final_output_bitstream;
-        
+
         if (GlobalDebug::DEBUG_PRINT_ENABLED) std::cout << "\n--- [DEBUG|WRITE] Writing Global Header ---\n";
         BitBufferUtils::appendToBitstream(final_output_bitstream, dim, 8);
         BitBufferUtils::appendToBitstream(final_output_bitstream, pack_size, 16);
@@ -849,7 +827,7 @@ namespace { // Anonymous helpers for encoding
         BitBufferUtils::appendToBitstream(final_output_bitstream, (long long)page_results.size(), 32);
         BitBufferUtils::appendToBitstream(final_output_bitstream, page_size, 16);
         if (GlobalDebug::DEBUG_PRINT_ENABLED) std::cout << "  - Global Header: dim=" << dim << ", pack=" << pack_size << ", block=" << block_size << ", page_count=" << page_results.size() << ", page_size=" << page_size << "\n";
-        
+
         bool debug_page = false;
         for (size_t i = 0; i < page_results.size(); ++i) {
             if(i!=2){
@@ -860,7 +838,7 @@ namespace { // Anonymous helpers for encoding
             const auto& page = page_results[i];
             BitBuffer page_metadata_bitstream;
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "\n--- [DEBUG|WRITE] Writing Page " << i + 1 << " Metadata ---\n";
-            
+
             BitBufferUtils::appendToBitstream(page_metadata_bitstream, (long long)page.page_k, 16);
             BitBufferUtils::appendToBitstream(page_metadata_bitstream, page.total_data_points, 16);
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "  - Page Header: k=" << page.page_k << ", points=" << page.total_data_points << "\n";
@@ -876,7 +854,7 @@ namespace { // Anonymous helpers for encoding
                 BitBufferUtils::appendToBitstream(page_metadata_bitstream, abs_val, bit_len);
                 if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "    - Dim " << j << ": Decimals=" << page.max_decimal_placements[j] << ", MinValLen=" << bit_len << ", Sign=" << (val >= 0 ? 0 : 1) << ", AbsMinVal=" << abs_val << "\n";
             }
-            
+
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "  --- Writing Min Bases & Base Bit Lengths ---\n";
             for (int j = 0; j < dim; ++j) {
                 long long val = page.min_base[j];
@@ -892,12 +870,15 @@ namespace { // Anonymous helpers for encoding
             BitBufferUtils::appendToBitstream(page_metadata_bitstream, (long long)page.pack_res_metadata.size(), 16);
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "  - Wrote Pack Metadata Count: " << page.pack_res_metadata.size() << "\n";
             for (const auto& pack : page.pack_res_metadata) for (int val : pack) BitBufferUtils::appendToBitstream(page_metadata_bitstream, val, 8);
-            
+
             final_output_bitstream.merge(page_metadata_bitstream);
             final_output_bitstream.merge(page.base_bitstream);
             final_output_bitstream.merge(page.fre_bitstream);
             final_output_bitstream.merge(page.residual_bitstream);
         }
+#ifdef ACLUSTER_BUFFER_EXPERIMENT
+        experimentEncodedBits = final_output_bitstream.size();
+#endif
         return final_output_bitstream.toByteArray();
     }
 }
@@ -912,7 +893,6 @@ ClusterEncoderPageResult clusterEncoderPage(
 
     ClusteringResult clustering_res = cluster_strategy(*preproc_res_ptr->data, k, dim);
 
-    // FOR DEBUG
     if (GlobalDebug::DEBUG_PRINT_ENABLED && page_idx == 2) {
         std::cout << "\n--- [DEBUG|ENCODE] Page " << page_idx + 1 << " Clustering Results ---\n";
 
@@ -932,18 +912,17 @@ ClusterEncoderPageResult clusterEncoderPage(
             std::cout << "  - Freq for Medoid " << std::setw(3) << m << ": " << clustering_res.cluster_sizes[m] << "\n";
         }
     }
-    // DEBUG END
 
     int page_k = clustering_res.medoids.size();
     BitBuffer fre_bitstream = generateBitstreamFrequency(clustering_res.cluster_sizes, block_size);
-    
+
     std::vector<std::vector<long long>> residuals = residualCalculationZigzag_sorted(
-        *preproc_res_ptr->data, clustering_res.medoids, clustering_res.cluster_assignment, 
+        *preproc_res_ptr->data, clustering_res.medoids, clustering_res.cluster_assignment,
         clustering_res.cluster_sizes, dim);
 
     EncodedDataResult bitstream_res = generateBitstreamEncodedData(residuals, pack_size, dim);
     BasePointsResult basepoint_res = generateBitstreamEncodedBasePointsOptimized(clustering_res.medoids, dim);
-    
+
     return {
         preproc_res.max_decimal_places, preproc_res.min_values,
         fre_bitstream, bitstream_res.residual_bitstream,
@@ -967,7 +946,6 @@ std::pair<ClusterEncoderPageResult, PageDiagnostics> clusterEncoderPage_with_dia
     diag.algorithm_name = algorithm_name;
     auto& timings = diag.timings;
 
-    // --- 1. Clustering with timing and cost retrieval ---
     auto start_cluster = std::chrono::high_resolution_clock::now();
     ClusteringResult clustering_res;
     if (algorithm_name == "KCluster") {
@@ -979,37 +957,33 @@ std::pair<ClusterEncoderPageResult, PageDiagnostics> clusterEncoderPage_with_dia
         clustering_res = a_res.result;
         diag.acluster_costs.final_total_cost_bits = a_res.final_cost;
     } else {
-        // Fallback for any other algorithm if needed
-        clustering_res = kMedoidLogCost(*preproc_res.data, k, 10, 1.0e-3, dim); // Example
+
+        clustering_res = kMedoidLogCost(*preproc_res.data, k, 10, 1.0e-3, dim);
     }
     auto end_cluster = std::chrono::high_resolution_clock::now();
     timings.clustering_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_cluster - start_cluster).count();
-    
-    // --- 2. Residual calculation with timing ---
+
     auto start_residual = std::chrono::high_resolution_clock::now();
     std::vector<std::vector<long long>> residuals = residualCalculationZigzag_sorted(
-        *preproc_res.data, clustering_res.medoids, clustering_res.cluster_assignment, 
+        *preproc_res.data, clustering_res.medoids, clustering_res.cluster_assignment,
         clustering_res.cluster_sizes, dim);
     auto end_residual = std::chrono::high_resolution_clock::now();
     timings.residual_calc_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_residual - start_residual).count();
-    
-    // --- 3. Bitstream generation with timing and size calculation ---
+
     auto start_bitstream = std::chrono::high_resolution_clock::now();
-    
+
     int page_k = clustering_res.medoids.size();
     BitBuffer fre_bitstream = generateBitstreamFrequency(clustering_res.cluster_sizes, block_size);
     EncodedDataResult bitstream_res = generateBitstreamEncodedData(residuals, pack_size, dim);
     BasePointsResult basepoint_res = generateBitstreamEncodedBasePointsOptimized(clustering_res.medoids, dim);
-    
+
     auto end_bitstream = std::chrono::high_resolution_clock::now();
     timings.bitstream_gen_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_bitstream - start_bitstream).count();
 
-    // --- 4. Populate component sizes in diagnostics ---
     diag.sizes.frequencies_bits = fre_bitstream.size();
     diag.sizes.residuals_bits = bitstream_res.residual_bitstream.size();
     diag.sizes.medoids_bits = basepoint_res.base_bitstream.size();
 
-    // Construct the page result for assembly
     ClusterEncoderPageResult page_result = {
         preproc_res.max_decimal_places, preproc_res.min_values,
         std::move(fre_bitstream), std::move(bitstream_res.residual_bitstream),
@@ -1018,16 +992,14 @@ std::pair<ClusterEncoderPageResult, PageDiagnostics> clusterEncoderPage_with_dia
         std::move(basepoint_res.max_base_bit_len), std::move(basepoint_res.base_bitstream),
         page_k
     };
-    
+
     return {std::move(page_result), std::move(diag)};
 }
-
-
 
 std::pair<std::vector<uint8_t>, GlobalDiagnostics> encode_multidim_impl_with_diag(
     const std::string& csv_file_path, int& dim,
     const std::string& algorithm_name,
-    int k, int pack_size, int block_size, int page_size) 
+    int k, int pack_size, int block_size, int page_size)
 {
     std::vector<ClusterEncoderPageResult> all_page_results;
     GlobalDiagnostics global_diag;
@@ -1048,18 +1020,17 @@ std::pair<std::vector<uint8_t>, GlobalDiagnostics> encode_multidim_impl_with_dia
         auto start_preproc = std::chrono::high_resolution_clock::now();
         auto preproc_res_ptr = std::make_unique<PreprocessorResult>(preprocessPageFromStrings(page_lines, dim));
         auto end_preproc = std::chrono::high_resolution_clock::now();
-        
+
         if (!preproc_res_ptr || !preproc_res_ptr->data || preproc_res_ptr->data->num_rows == 0) continue;
-        
+
         int current_dim = preproc_res_ptr->data->dim;
         int page_index_counter = all_page_results.size();
 
         auto [page_result, page_diag] = clusterEncoderPage_with_diag(
             std::move(preproc_res_ptr), algorithm_name, k, pack_size, current_dim, block_size, page_index_counter);
-        
+
         page_diag.timings.preprocessing_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_preproc - start_preproc).count();
-        
-        // Aggregate diagnostics
+
         global_diag.total_timings.preprocessing_ns += page_diag.timings.preprocessing_ns;
         global_diag.total_timings.clustering_ns += page_diag.timings.clustering_ns;
         global_diag.total_timings.residual_calc_ns += page_diag.timings.residual_calc_ns;
@@ -1076,13 +1047,12 @@ std::pair<std::vector<uint8_t>, GlobalDiagnostics> encode_multidim_impl_with_dia
                 std::cout << "[DIAG] Page " << page_index_counter << " ACluster Final Cost: " << page_diag.acluster_costs.final_total_cost_bits << "\n";
             }
         }
-        
+
         all_page_results.push_back(std::move(page_result));
     }
 
     if (all_page_results.empty()) return {{}, {}};
 
-    // Calculate header size
     BitBuffer header_buf;
     BitBufferUtils::appendToBitstream(header_buf, dim, 8);
     BitBufferUtils::appendToBitstream(header_buf, pack_size, 16);
@@ -1096,23 +1066,23 @@ std::pair<std::vector<uint8_t>, GlobalDiagnostics> encode_multidim_impl_with_dia
         BitBufferUtils::appendToBitstream(page_header_buf, (long long)page.page_k, 16);
         BitBufferUtils::appendToBitstream(page_header_buf, page.total_data_points, 16);
         for (int j = 0; j < dim; ++j) {
-            page_header_buf.currentBitPos += 8; // max_decimal_places
-            page_header_buf.currentBitPos += 8 + 1 + 32; // min_values (estimate)
-            page_header_buf.currentBitPos += 8 + 1 + 32; // min_base (estimate)
-            page_header_buf.currentBitPos += 8; // max_base_bit_len
+            page_header_buf.currentBitPos += 8;
+            page_header_buf.currentBitPos += 8 + 1 + 32;
+            page_header_buf.currentBitPos += 8 + 1 + 32;
+            page_header_buf.currentBitPos += 8;
         }
-        page_header_buf.currentBitPos += 16; // pack_res_metadata.size()
+        page_header_buf.currentBitPos += 16;
         for(const auto& pack : page.pack_res_metadata) page_header_buf.currentBitPos += pack.size() * 8;
         global_diag.total_sizes.header_bits += page_header_buf.size();
     }
-    
+
     return {assemble_final_bytestream(all_page_results, dim, pack_size, block_size, page_size), global_diag};
 }
 
 std::vector<uint8_t> encode_multidim_impl(
     const std::string& csv_file_path, int& dim,
     const std::function<ClusteringResult(const SoAData<long long>&, int, int)>& cluster_strategy,
-    int k, int pack_size, int block_size, int page_size) 
+    int k, int pack_size, int block_size, int page_size)
 {
     std::vector<ClusterEncoderPageResult> all_page_results;
     std::ifstream file_stream(csv_file_path);
@@ -1152,7 +1122,7 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
 
     std::vector<double> pow10_lookup; for (int i = 0; i < 20; ++i) pow10_lookup.push_back(std::pow(10, i));
     std::vector<std::vector<double>> all_data_rows;
-    
+
     bool debug_page = false;
     for (int i = 0; i < page_count; ++i) {
         if(i!=2){
@@ -1176,7 +1146,7 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
             min_values[j] = (sign == 0) ? abs_val : -abs_val;
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "    - Dim " << j << ": Decimals=" << max_decimals[j] << ", MinValLen=" << bit_len << ", Sign=" << sign << ", AbsMinVal=" << abs_val << "\n";
         }
-        
+
         if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "  --- Reading Min Bases & Base Bit Lengths ---\n";
         std::vector<long long> min_bases(dim);
         std::vector<int> max_base_bit_len(dim);
@@ -1188,16 +1158,16 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
             max_base_bit_len[j] = reader.readBits(8);
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "    - Dim " << j << ": MinBaseLen=" << bit_len << ", Sign=" << sign << ", AbsMinBase=" << abs_val << ", MaxBaseBitLen=" << max_base_bit_len[j] << "\n";
         }
-        
+
         int pack_num = reader.readBits(16);
         if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "  - Read Pack Metadata Count: " << pack_num << "\n";
         std::vector<std::vector<int>> pack_metadata(pack_num, std::vector<int>(dim));
         for (int p = 0; p < pack_num; ++p) for (int j = 0; j < dim; ++j) pack_metadata[p][j] = reader.readBits(8);
-        
+
         if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) std::cout << "pack_metadata" << "\n";
         std::vector<std::vector<long long>> medoids_long(k, std::vector<long long>(dim));
         for (int m = 0; m < k; ++m) for (int j = 0; j < dim; ++j) medoids_long[m][j] = reader.readBits(max_base_bit_len[j]) + min_bases[j];
-        
+
         if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) {
             std::cout << "\n--- [DEBUG|DECODE] Decoded Medoids ---\n";
             for (int m = 0; m < 10; ++m) {
@@ -1212,8 +1182,7 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
         std::vector<long long> cluster_sizes(k, 0);
         if (k > 0) {
             int num_freq_blocks = (k + block_size - 1) / block_size;
-            
-            // --- Step 1: Read ALL metadata (max_bits) first ---
+
             std::vector<int> max_bits_per_block(num_freq_blocks);
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) {
                 std::cout << "\n--- [DEBUG|FREQ_READ] Reading all " << num_freq_blocks << " max_bit metadata blocks ---\n";
@@ -1225,7 +1194,6 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
                 }
             }
 
-            // --- Step 2: Now, read ALL delta data using the stored metadata ---
             std::vector<long long> deltas(k);
             int freq_idx = 0;
             if (GlobalDebug::DEBUG_PRINT_ENABLED && debug_page) {
@@ -1240,7 +1208,6 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
                 freq_idx = end;
             }
 
-            // --- Step 3: Reconstruct the cumulative sum (This part is correct) ---
             cluster_sizes[0] = deltas[0];
             for (size_t j = 1; j < deltas.size(); ++j) {
                 cluster_sizes[j] = cluster_sizes[j - 1] + deltas[j];
@@ -1267,11 +1234,11 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
                 }
             }
         }
-        
+
         if (page_data_points > 0 && k > 0) {
             int current_point_idx = 0;
             for (int medoid_idx = 0; medoid_idx < k; ++medoid_idx) {
-                // Get the number of points IN THIS SPECIFIC CLUSTER
+
                 long long points_in_this_cluster = cluster_sizes[medoid_idx];
                 const auto& base_point = medoids_long[medoid_idx];
 
@@ -1298,5 +1265,19 @@ std::vector<std::vector<double>> decode_multidim_impl(const std::vector<uint8_t>
     return all_data_rows;
 }
 
-
-} // namespace ClusterLogic
+}
+#ifdef ACLUSTER_BUFFER_EXPERIMENT
+namespace ClusterLogic {
+ClusteringResult sortClusteringBySize(std::vector<std::vector<long long>>& refs,
+    std::vector<int>& assignments, std::vector<long long>& sizes) {
+    return sortResults(refs, assignments, sizes);
+}
+ExperimentEncodedPage encodeExperimentPage(const std::vector<std::string>& lines, int& dim) {
+    auto pre = std::make_unique<PreprocessorResult>(preprocessPageFromStrings(lines, dim));
+    auto strategy = [](const SoAData<long long>& data, int, int) { return ::experimentSelect(data); };
+    auto page = clusterEncoderPage(std::move(pre), strategy, 100, 10, dim, 10, 0);
+    auto bytes = assemble_final_bytestream({page}, dim, 10, 10, 10000);
+    return {std::move(bytes), experimentEncodedBits};
+}
+}
+#endif

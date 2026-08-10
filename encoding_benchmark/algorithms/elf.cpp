@@ -30,14 +30,10 @@ inline double long_to_double(uint64_t val) {
 
 namespace {
 
-// =====================================================================================
-//                                    Elf64Utils
-// =====================================================================================
 namespace Elf64Utils {
-    // Forward declarations
+
     static double get10iP(int i);
 
-    // αlog_2(10) for look-up
     static constexpr std::array<int, 21> f = {0, 4, 7, 10, 14, 17, 20, 24, 27, 30, 34, 37, 40, 44, 47, 50, 54, 57, 60, 64, 67};
     static constexpr std::array<double, 21> map10iP = {1.0, 1.0E1, 1.0E2, 1.0E3, 1.0E4, 1.0E5, 1.0E6, 1.0E7, 1.0E8, 1.0E9, 1.0E10, 1.0E11, 1.0E12, 1.0E13, 1.0E14, 1.0E15, 1.0E16, 1.0E17, 1.0E18, 1.0E19, 1.0E20};
     static constexpr std::array<double, 21> map10iN = {1.0, 1.0E-1, 1.0E-2, 1.0E-3, 1.0E-4, 1.0E-5, 1.0E-6, 1.0E-7, 1.0E-8, 1.0E-9, 1.0E-10, 1.0E-11, 1.0E-12, 1.0E-13, 1.0E-14, 1.0E-15, 1.0E-16, 1.0E-17, 1.0E-18, 1.0E-19, 1.0E-20};
@@ -67,7 +63,7 @@ namespace Elf64Utils {
             return map10iP[i];
         }
     }
-    
+
     double get10iN(int i) {
         if (i < 0) {
             throw std::invalid_argument("The argument should be greater than 0");
@@ -87,8 +83,7 @@ namespace Elf64Utils {
             return std::ceil(v * scale) / scale;
         }
     }
-    
-    // Corresponds to Java's getSPAnd10iNFlag
+
     std::array<int, 2> getSPAnd10iNFlag(double v) {
         std::array<int, 2> spAnd10iNFlag = {0, 0};
         if (v >= 1) {
@@ -112,8 +107,7 @@ namespace Elf64Utils {
         spAnd10iNFlag[1] = (log10v == static_cast<long long>(log10v)) ? 1 : 0;
         return spAnd10iNFlag;
     }
-    
-    // Corresponds to Java's getSignificantCount
+
     int getSignificantCount(double v, int sp, int lastBetaStar) {
         int i;
         if (lastBetaStar != std::numeric_limits<int>::max() && lastBetaStar != 0) {
@@ -134,7 +128,7 @@ namespace Elf64Utils {
             tempLong = static_cast<long long>(temp);
         }
 
-        constexpr double epsilon = 1e-9; // Tolerance for float comparison
+        constexpr double epsilon = 1e-9;
         if (std::abs(temp / get10iP(i) - v) > epsilon) {
             return 17;
         } else {
@@ -145,8 +139,7 @@ namespace Elf64Utils {
             return sp + i + 1;
         }
     }
-    
-    // Corresponds to Java's getAlphaAndBetaStar
+
     std::array<int, 2> getAlphaAndBetaStar(double v, int lastBetaStar) {
         if (v < 0) {
             v = -v;
@@ -159,16 +152,12 @@ namespace Elf64Utils {
         return alphaAndBetaStar;
     }
 
-} // namespace Elf64Utils
+}
 
-
-// =====================================================================================
-//                                ElfXORCompressorImpl
-// =====================================================================================
 class ElfXORCompressorImpl {
 public:
-    ElfXORCompressorImpl(OutputBitStream& stream) 
-        : out(stream), storedLeadingZeros(std::numeric_limits<int>::max()), 
+    ElfXORCompressorImpl(OutputBitStream& stream)
+        : out(stream), storedLeadingZeros(std::numeric_limits<int>::max()),
           storedTrailingZeros(std::numeric_limits<int>::max()), storedVal(0), first(true) {}
 
     OutputBitStream& getOutputStream() { return out; }
@@ -200,14 +189,14 @@ private:
         long long xor_val = storedVal ^ value;
 
         if (xor_val == 0) {
-            out.write_bits(0b01, 2); // case 01
+            out.write_bits(0b01, 2);
         } else {
             int leadingZeros = count_leading_zeros(xor_val);
             int trailingZeros = count_trailing_zeros(xor_val);
             int roundedLeadingZeros = ElfXORCompressorImpl::leading_round[leadingZeros];
 
             if (roundedLeadingZeros == storedLeadingZeros && trailingZeros >= storedTrailingZeros) {
-                // case 00
+
                 int centerBits = 64 - storedLeadingZeros - storedTrailingZeros;
                 out.write_bits(0b00, 2);
                 out.write_bits(xor_val >> storedTrailingZeros, centerBits);
@@ -217,12 +206,12 @@ private:
                 int centerBits = 64 - storedLeadingZeros - storedTrailingZeros;
 
                 if (centerBits > 0 && centerBits <= 16) {
-                    // case 10
+
                     uint64_t header = (0b10 << 7) | (ElfXORCompressorImpl::leading_representation[leadingZeros] << 4) | (centerBits & 0xf);
                     out.write_bits(header, 9);
                     out.write_bits(xor_val >> (storedTrailingZeros + 1), centerBits - 1);
                 } else {
-                    // case 11
+
                     uint64_t header = (0b11 << 9) | (ElfXORCompressorImpl::leading_representation[leadingZeros] << 6) | (centerBits & 0x3f);
                     out.write_bits(header, 11);
                     if (centerBits > 0)
@@ -243,10 +232,6 @@ private:
     bool first;
 };
 
-
-// =====================================================================================
-//                                ElfCompressorImpl
-// =====================================================================================
 class ElfCompressorImpl {
 public:
     ElfCompressorImpl(OutputBitStream& stream) : xorCompressor(stream), lastBetaStar(std::numeric_limits<int>::max()) {}
@@ -265,7 +250,7 @@ public:
             std::array<int, 2> alphaAndBetaStar = Elf64Utils::getAlphaAndBetaStar(v, lastBetaStar);
             int e = static_cast<int>((vLong >> 52) & 0x7ff);
             int gAlpha = Elf64Utils::getFAlpha(alphaAndBetaStar[0]) + e - 1023;
-            
+
             if (gAlpha < 0) gAlpha = 0;
             int eraseBits = 52 - gAlpha;
 
@@ -274,21 +259,21 @@ public:
 
             if (delta != 0 && eraseBits > 4) {
                 if (alphaAndBetaStar[1] == lastBetaStar) {
-                    xorCompressor.getOutputStream().write_bit(false); // case 0
+                    xorCompressor.getOutputStream().write_bit(false);
                 } else {
                     uint64_t header = (0b11 << 4) | (alphaAndBetaStar[1] & 0xf);
-                    xorCompressor.getOutputStream().write_bits(header, 6); // case 11
+                    xorCompressor.getOutputStream().write_bits(header, 6);
                     lastBetaStar = alphaAndBetaStar[1];
                 }
                 vPrimeLong = mask & vLong;
             } else {
-                xorCompressor.getOutputStream().write_bits(0b10, 2); // case 10
+                xorCompressor.getOutputStream().write_bits(0b10, 2);
                 vPrimeLong = vLong;
             }
         }
         xorCompressor.addValue(vPrimeLong);
     }
-    
+
     void close() {
         xorCompressor.getOutputStream().write_bits(0b10, 2);
         xorCompressor.close();
@@ -299,14 +284,10 @@ private:
     int lastBetaStar;
 };
 
-
-// =====================================================================================
-//                                ElfXORDecompressorImpl
-// =====================================================================================
 class ElfXORDecompressorImpl {
 public:
-    ElfXORDecompressorImpl(InputBitStream& stream) 
-        : in(stream), storedVal(0), storedLeadingZeros(std::numeric_limits<int>::max()), 
+    ElfXORDecompressorImpl(InputBitStream& stream)
+        : in(stream), storedVal(0), storedLeadingZeros(std::numeric_limits<int>::max()),
           storedTrailingZeros(std::numeric_limits<int>::max()), first(true), endOfStream(false) {}
 
     double readValue() {
@@ -341,7 +322,7 @@ private:
     void nextValue() {
         int flag = in.read_bits(2);
         switch (flag) {
-            case 0b11: { // case 11
+            case 0b11: {
                 uint64_t leadAndCenter = in.read_bits(9);
                 storedLeadingZeros = leading_decode[leadAndCenter >> 6];
                 int centerBits = leadAndCenter & 0x3f;
@@ -355,7 +336,7 @@ private:
                 storedVal ^= value;
                 break;
             }
-            case 0b10: { // case 10
+            case 0b10: {
                 uint64_t leadAndCenter = in.read_bits(7);
                 storedLeadingZeros = leading_decode[leadAndCenter >> 4];
                 int centerBits = leadAndCenter & 0xf;
@@ -366,9 +347,9 @@ private:
                 storedVal ^= value;
                 break;
             }
-            case 0b01: // case 01, same value
+            case 0b01:
                 break;
-            default: { // case 00
+            default: {
                 int centerBits = 64 - storedLeadingZeros - storedTrailingZeros;
                 long long value = in.read_bits(centerBits) << storedTrailingZeros;
                 storedVal ^= value;
@@ -389,10 +370,6 @@ private:
     bool endOfStream;
 };
 
-
-// =====================================================================================
-//                                ElfDecompressorImpl (CORRECTED)
-// =====================================================================================
 class ElfDecompressorImpl {
 public:
     ElfDecompressorImpl(InputBitStream& stream) : xorDecompressor(stream), lastBetaStar(std::numeric_limits<int>::max()) {}
@@ -422,7 +399,7 @@ private:
         int sp = spAndFlag[0];
         double v;
         if (lastBetaStar == 0) {
-            v = Elf64Utils::get10iN(-sp - 1); // Note: Java code calls get10iN here
+            v = Elf64Utils::get10iN(-sp - 1);
             if (vPrime < 0) {
                 v = -v;
             }
@@ -439,12 +416,7 @@ private:
     int lastBetaStar;
 };
 
-
-} // end anonymous namespace
-
-// =====================================================================================
-//                                  Public Elf Class
-// =====================================================================================
+}
 
 std::vector<uint8_t> Elf::encode(const std::vector<double>& values) {
     if (values.empty()) {
@@ -466,7 +438,7 @@ std::vector<double> Elf::decode(const std::vector<uint8_t>& compressed_data) {
     InputBitStream in(compressed_data);
     ElfDecompressorImpl decoder(in);
     std::vector<double> values;
-    
+
     while (true) {
         try {
             double val = decoder.nextValue();

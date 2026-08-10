@@ -1,0 +1,14 @@
+{
+  "recorded_date": "2026-10-09",
+  "command": "ctest --test-dir encoding_benchmark/build --output-on-failure",
+  "status": "PASS",
+  "tests": [
+    "table_roundtrip",
+    "order_cleanup"
+  ],
+  "output_excerpt": [
+    "End-to-end tests passed: split columns, duplicate tuples, short pages, signed zero, precision corrections, constant/1D inputs, byte accounting, truncated streams.",
+    "Optimal exhaustive oracle checks passed",
+    "PASS 240 baseline cases and 720 multidimensional cleanup cases; 3191 deletions audited"
+  ]
+}

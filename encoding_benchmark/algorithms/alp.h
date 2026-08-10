@@ -14,4 +14,4 @@ public:
     std::vector<double> decode(const std::vector<uint8_t>& data);
 };
 
-#endif // ALP_H
+#endif

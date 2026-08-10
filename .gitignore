@@ -13,3 +13,12 @@
 *.user
 
 .idea/
+
+build/
+.build/
+.deps/
+output/
+*.log
+*.obj
+*.etb
+*.pyc

@@ -97,7 +97,7 @@ bool vortex_less(const std::vector<RankColPair>& lhs, const std::vector<RankColP
     return false;
 }
 
-} 
+}
 
 std::vector<uint32_t> Vortex::compute_permutation(const std::vector<std::vector<double>>& rows) const {
     if (rows.empty()) return {};

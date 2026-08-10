@@ -1,8 +1,6 @@
 #include "bit_stream.h"
 #include "debug.h"
 
-// --- OutputBitStream Implementation ---
-
 OutputBitStream::OutputBitStream() : current_byte_(0), bit_position_(0) {
     buffer_.reserve(1024);
 }
@@ -19,7 +17,6 @@ void OutputBitStream::write_bit(bool bit) {
     }
 }
 
-
 void OutputBitStream::write_bits(uint64_t value, int num_bits) {
     DEBUG_BITS("Write", value, num_bits);
     if (num_bits > 64) {
@@ -34,7 +31,6 @@ const std::vector<uint8_t>& OutputBitStream::get_buffer() const {
     return buffer_;
 }
 
-
 std::vector<uint8_t> OutputBitStream::get_bytes() {
     std::vector<uint8_t> result = buffer_;
     if (bit_position_ > 0) {
@@ -43,14 +39,12 @@ std::vector<uint8_t> OutputBitStream::get_bytes() {
     return result;
 }
 
-
 size_t OutputBitStream::get_byte_count() const {
     return buffer_.size() + (bit_position_ > 0 ? 1 : 0);
 }
 
 void OutputBitStream::write_bits_padded(uint64_t value, int bits) {
-    // This function writes 'bits' LSBs of value, byte by byte.
-    // It's different from write_bits which is bit-by-bit.
+
     for (int i = 0; i < bits; i += 8) {
         int bits_to_write = std::min(8, bits - i);
         uint8_t byte = (value >> i) & ((1 << bits_to_write) - 1);
@@ -68,17 +62,16 @@ void OutputBitStream::write_unsigned_varint(uint32_t value) {
 
 void OutputBitStream::write_bytes(const std::vector<uint8_t>& bytes) {
     if (bit_position_ == 0) {
-        
-        flush(); 
+
+        flush();
         buffer_.insert(buffer_.end(), bytes.begin(), bytes.end());
     } else {
-        
+
         for (uint8_t byte : bytes) {
             write_bits(byte, 8);
         }
     }
 }
-
 
 void OutputBitStream::flush() {
     if (bit_position_ > 0) {
@@ -90,29 +83,27 @@ void OutputBitStream::flush() {
 
 std::vector<uint8_t> InputBitStream::read_remaining_bytes() {
     std::vector<uint8_t> remaining;
-    
-    
+
     if (bit_position_ != 0) {
-        
+
         while (has_more()) {
             try {
                 remaining.push_back(static_cast<uint8_t>(read_bits(8)));
             } catch (const std::out_of_range&) {
-                
+
                 break;
             }
         }
     } else {
-        
+
         if (byte_index_ < buffer_.size()) {
             remaining.insert(remaining.end(), buffer_.begin() + byte_index_, buffer_.end());
-            byte_index_ = buffer_.size(); 
+            byte_index_ = buffer_.size();
         }
     }
     return remaining;
 }
 
-// --- InputBitStream Implementation ---
 InputBitStream::InputBitStream(const std::vector<uint8_t>& buffer)
     : buffer_(buffer), byte_index_(0), bit_position_(0) {}
 

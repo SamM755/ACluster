@@ -1,4 +1,3 @@
-// in algorithms/cluster_common.h
 #ifndef CLUSTER_COMMON_H
 #define CLUSTER_COMMON_H
 
@@ -7,7 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <iostream>
-#include <iomanip> 
+#include <iomanip>
 #include <chrono>
 
 template<typename T>
@@ -44,7 +43,7 @@ struct ComponentSizes {
 };
 
 struct KClusterCosts {
-    long long final_residual_cost_bits = 0; 
+    long long final_residual_cost_bits = 0;
 };
 
 struct AClusterCosts {
@@ -56,11 +55,11 @@ struct PageDiagnostics {
     int page_reference_count = 0;
     StageTimings timings;
     ComponentSizes sizes;
-    
+
     KClusterCosts kcluster_costs;
     AClusterCosts acluster_costs;
 
-    std::string algorithm_name; 
+    std::string algorithm_name;
 };
 struct GlobalDiagnostics {
     StageTimings total_timings;
@@ -86,7 +85,7 @@ struct GlobalDiagnostics {
         size_t total_bits = total_sizes.header_bits + total_sizes.medoids_bits +
                             total_sizes.frequencies_bits + total_sizes.residuals_bits;
         if (total_bits == 0) total_bits = 1;
-        
+
         std::cout << "2. Encoding Component Size Breakdown:\n";
         std::cout << "   - Header:         " << std::setw(8) << total_sizes.header_bits / 8 << " bytes ("
                   << (total_sizes.header_bits * 100.0 / total_bits) << "%)\n";
@@ -100,4 +99,4 @@ struct GlobalDiagnostics {
     }
 };
 
-#endif // CLUSTER_COMMON_H
+#endif

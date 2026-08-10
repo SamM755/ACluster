@@ -1,0 +1,6 @@
+{
+  "duckdb": {
+    "url": "https://github.com/duckdb/duckdb.git",
+    "commit": "d591bb1da2de3cb12329c75aff2c31bebe922b59"
+  }
+}

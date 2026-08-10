@@ -1,0 +1,28 @@
+{
+  "recorded_date": "2026-10-09",
+  "duckdb_commit": "d591bb1da2de3cb12329c75aff2c31bebe922b59",
+  "command": "bash extension/duckdb/scripts/test.sh",
+  "status": "PASS",
+  "output_excerpt": [
+    "All tests passed (94 assertions in 2 test cases)",
+    "PASS 36 hybrid/ALP page cases including NULL, NaN payloads, signed zero and RAW substreams",
+    "PASS 75 page cases; raw=63 acluster=6 kcluster=6 corrected_pages=2",
+    "PASS 150 Zstd page round trips and corruption checks"
+  ],
+  "integration": {
+    "command": "python extension/duckdb/scripts/integration_test.py",
+    "status": "PASS",
+    "rows": 20037,
+    "columns": 3,
+    "checks": [
+      "acluster: fresh-process bitwise tuple multiset, aggregates, page totals, deterministic file",
+      "kcluster: fresh-process bitwise tuple multiset, aggregates, page totals, deterministic file",
+      "raw: fresh-process bitwise tuple multiset, aggregates, page totals, deterministic file",
+      "truncated rejected",
+      "header rejected",
+      "page rejected",
+      "trailer rejected",
+      "Empty file schema and zero rows"
+    ]
+  }
+}

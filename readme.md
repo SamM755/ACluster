@@ -34,7 +34,7 @@ The two BT files larger than 100 MiB are stored with Git LFS. After cloning, ins
 Use MSYS2 MINGW64:
 
 ```bash
-cd /d/path/to/ACluster/encoding_benchmark
+cd encoding_benchmark
 cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
@@ -72,9 +72,9 @@ The paper mapping below follows the figure and table numbers in the compiled man
 | KMeans comparison | `./benchmark.exe --experiment kmeans` | KCluster and ACluster compared with Euclidean KMeans encoding | Table 5 | `output/kmeans/results.csv` |
 | Peak memory | `./benchmark.exe --experiment memory` | Peak encoding-memory comparison across all methods | Table 7 | `output/memory/memory_average.csv` |
 | GZIP composition | `./benchmark.exe --experiment gzip` | Every supported encoding method followed by GZIP | Figure 14 | `output/gzip/results.csv` |
-| Parameter sensitivity | `./benchmark.exe --experiment sensitivity` | KCluster `K`, page size, and pack size; ACluster page size and pack size | Not currently assigned a numbered paper result | `output/sensitivity/results.csv` |
-| Reference comparison | `./benchmark.exe --experiment reference` | Adaptive ACluster references versus KCluster with fixed `K` values | Not currently assigned a numbered paper result | `output/reference/results.csv` |
-| Subspace grouping | `./benchmark.exe --experiment subspace` | Full-space KCluster/ACluster versus grouped-dimension KClusterSub | Not currently assigned a numbered paper result | `output/subspace/subspace_group_raw_results.csv` |
+| Parameter sensitivity | `./benchmark.exe --experiment sensitivity` | KCluster `K`, page size, and pack size; ACluster page size and pack size | Appendix A.2.4, Parameter Settings (supplementary sweep) | `output/sensitivity/results.csv` |
+| Reference comparison | `./benchmark.exe --experiment reference` | Adaptive ACluster references versus KCluster with fixed `K` values | Rebuttal to Reviewer Na8t's W, parameter-free design (supplementary comparison) | `output/reference/results.csv` |
+| Subspace grouping | `./benchmark.exe --experiment subspace` | Full-space KCluster/ACluster versus grouped-dimension KClusterSub | Rebuttal to Reviewer ab4a's W3 (KClusterSub comparison) | `output/subspace/subspace_group_raw_results.csv` |
 
 The adjacent-cluster-scope experiment reported in Table 6 is intentionally not included because it requires changing ACluster's internal comparison scope.
 
@@ -97,3 +97,31 @@ Run the full suite once as a smoke test and write results to a separate director
 ```bash
 ./benchmark.exe --experiment all --runs 1 --output-root smoke_output
 ```
+
+## Additional Experiments
+
+Run from the repository root after the benchmark build. Python 3.10 or later is required.
+
+```bash
+python encoding_benchmark/scripts/check_data.py
+ctest --test-dir encoding_benchmark/build --output-on-failure
+python encoding_benchmark/scripts/run.py end-to-end
+python encoding_benchmark/scripts/run.py optimal
+python encoding_benchmark/scripts/run.py order
+```
+
+| Addition | Inputs and methods | Details |
+|---|---|---|
+| Full-table end-to-end | All rows and original columns of Musk, Crop, Gas, CT and BT; ten methods | [README](encoding_benchmark/end_to_end/README.md) |
+| Optimal comparison | SSD, BC and PI; KOptimal, KCluster, AOptimal and ACluster | [README](encoding_benchmark/optimal/README.md) |
+| Order heuristic | BC and BT; ACluster and cleanup with fixed page membership | [README](encoding_benchmark/order/README.md) |
+| DuckDB extension | Full-table COPY/scan comparison | [Build and experiment](extension/duckdb/README.md) |
+
+Use `--datasets`, `--runs` and `--output` to select a run. Data paths are resolved from the repository; standalone output paths are relative to `encoding_benchmark/`. Results are written under `encoding_benchmark/output/` or `extension/duckdb/output/`.
+
+The [rebuttal index](RebuttalReproducibility.md) maps reviewer questions to experiment and test code and execution commands, including binary64 tests.
+
+## TsFile and Apache IoTDB
+
+- [Apache TsFile: research/cluster-compress](https://github.com/apache/tsfile/tree/research/cluster-compress)
+- [Apache IoTDB: research/cluster-compress](https://github.com/apache/iotdb/tree/research/cluster-compress)

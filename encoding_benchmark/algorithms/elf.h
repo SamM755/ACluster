@@ -12,4 +12,4 @@ public:
     std::string get_name() const { return "Elf"; }
 };
 
-#endif // ELF_H
+#endif

@@ -6,8 +6,8 @@
 #include <cassert>
 #include <cmath>
 #include <iomanip>
-#include <fstream>      // For file I/O
-#include <filesystem>   // For creating directories (C++17)
+#include <fstream>
+#include <filesystem>
 #include <algorithm>
 #include <map>
 #include <set>
@@ -38,9 +38,6 @@
 #include "algorithms/vortex.h"
 #include "utils/debug.h"
 
-// ==========================================
-// Global CSV Output Handler & Stats Utils
-// ==========================================
 std::ofstream resultsFile;
 std::ofstream memoryResultsFile;
 std::map<std::string, std::vector<double>> methodMemoryBytes;
@@ -76,7 +73,7 @@ void init_results_csv(const std::string& filepath) {
         std::cerr << "Error: Could not open results file for writing: " << filepath << std::endl;
         exit(1);
     }
-    // Write Header
+
     resultsFile << "Scenario,Dataset,Algorithm,Dimensions,Rows,OriginalSize_Bytes,CompressedSize_Bytes,CompressionRatio,BytesPerPoint,"
                 << "EncTime_Avg_ns,EncTime_Min_ns,EncTime_Max_ns,"
                 << "DecTime_Avg_ns,DecTime_Min_ns,DecTime_Max_ns\n";
@@ -183,7 +180,6 @@ struct TimeStats {
     double max;
 };
 
-// Calculate stats per ROW/POINT based on divisor
 TimeStats calculate_stats(const std::vector<long long>& times_ns, int divisor) {
     if (times_ns.empty() || divisor == 0) return {0.0, 0.0, 0.0};
 
@@ -196,10 +192,6 @@ TimeStats calculate_stats(const std::vector<long long>& times_ns, int divisor) {
         (double)(*max_it) / divisor
     };
 }
-
-// ==========================================
-// File I/O Helpers
-// ==========================================
 
 void write_binary_file(const std::string& filename, const std::vector<uint8_t>& data) {
     std::ofstream outfile(filename, std::ios::binary);
@@ -339,10 +331,6 @@ void write_scenario_summaries(const std::string& output_dir) {
     }
 }
 
-// ==========================================
-// Verification Helpers
-// ==========================================
-
 void verify_data_ordered(const std::vector<double>& original, const std::vector<double>& decoded, const std::string& col_name) {
     if (original.size() != decoded.size()) {
         std::cerr << "Verification failed for " << col_name << ": original size (" << original.size()
@@ -370,8 +358,6 @@ void verify_data_order_oblivious(std::vector<std::vector<double>>& original_rows
     }
     if (original_rows.empty()) return;
 
-    // Sorting is a stable way to compare for equality, works for duplicates.
-    // Create copies to sort so we don't mess up subsequent runs if we reused data (though we reload usually)
     auto sorted_orig = original_rows;
     auto sorted_dec = decoded_rows;
 
@@ -439,10 +425,6 @@ std::vector<std::vector<double>> bytes_to_columns(const std::vector<uint8_t>& by
     }
     return columns;
 }
-
-// ==========================================
-// Test Runner Functions
-// ==========================================
 
 int NUM_RUNS = 100;
 
@@ -770,12 +752,12 @@ void run_columnar_encoder_test(
     const std::string& output_dir,
     SecondaryCompressor* sec_comp = nullptr
 ) {
-    // Handle secondary compressor defaults
+
     NoneCompressor default_none;
     if (!sec_comp) sec_comp = &default_none;
 
     Compressor compressor;
-    std::string algorithm_name = compressor.get_name() + sec_comp->get_name(); // Combine names
+    std::string algorithm_name = compressor.get_name() + sec_comp->get_name();
 
     std::cout << "====================================================\n";
     std::cout << "Dataset: " << dataset_name << ".csv, Method: " << algorithm_name << "\n";
@@ -783,7 +765,6 @@ void run_columnar_encoder_test(
 
     std::vector<long long> all_compressed_sizes, all_encoding_times_ns, all_decoding_times_ns, all_peak_mem_bytes;
 
-    // Load data once
     std::vector<std::vector<double>> all_columns = read_csv_columns(csv_file_path);
     if (all_columns.empty() || all_columns[0].empty()) {
          std::cerr << "Warning: Data loading issue for " << dataset_name << ". Skipping test." << std::endl;
@@ -810,7 +791,6 @@ void run_columnar_encoder_test(
         });
         auto end_full_encode = std::chrono::high_resolution_clock::now();
 
-        // --- Decoding ---
         auto start_full_decode = std::chrono::high_resolution_clock::now();
         std::vector<std::vector<double>> decoded_columns;
         decoded_columns.reserve(all_columns.size());
@@ -819,14 +799,12 @@ void run_columnar_encoder_test(
             std::string compressed_filename = algo_output_dir + "/" + dataset_name + "_col_" + std::to_string(i) + ".bin";
             auto file_data = read_binary_file(compressed_filename);
 
-            // 1. Secondary Decompression
             auto primary_data = sec_comp->decompress(file_data);
-            // 2. Primary Decompression
+
             decoded_columns.push_back(compressor.decode(primary_data));
         }
         auto end_full_decode = std::chrono::high_resolution_clock::now();
 
-        // --- Verification (run only once) ---
         if (run == 0) {
             for(size_t i = 0; i < all_columns.size(); ++i) {
                 verify_data_ordered(all_columns[i], decoded_columns[i], algorithm_name + " col_" + std::to_string(i));
@@ -840,7 +818,6 @@ void run_columnar_encoder_test(
         all_peak_mem_bytes.push_back(static_cast<long long>(peak_mem_delta));
     }
 
-    // --- Stats ---
     double avg_compressed_size = std::accumulate(all_compressed_sizes.begin(), all_compressed_sizes.end(), 0.0) / NUM_RUNS;
     TimeStats enc_stats = calculate_stats(all_encoding_times_ns, effective_num_rows);
     TimeStats dec_stats = calculate_stats(all_decoding_times_ns, effective_num_rows);
@@ -856,14 +833,12 @@ void run_columnar_encoder_test(
     std::cout << "Peak Encode Memory:    " << avg_peak_mem << " bytes\n";
     std::cout << "====================================================\n" << std::endl;
 
-    // Log to CSV
     log_result_to_csv(dataset_name, algorithm_name, expected_dim, effective_num_rows, original_size_bytes, avg_compressed_size,
                       enc_stats.avg, enc_stats.min, enc_stats.max,
                       dec_stats.avg, dec_stats.min, dec_stats.max);
     log_memory_to_csv(dataset_name, algorithm_name, effective_num_rows, avg_peak_mem);
     cleanup_method_output(output_dir, algorithm_name);
 }
-
 
 void run_multidim_reger_test(
     const std::string& dataset_name, int expected_dim, int expected_num_rows,
@@ -882,7 +857,6 @@ void run_multidim_reger_test(
 
     std::vector<long long> all_compressed_sizes, all_encoding_times_ns, all_decoding_times_ns, all_peak_mem_bytes;
 
-    // Read data for processing
     std::vector<std::vector<std::string>> str_rows = read_csv_rows_as_strings(csv_file_path);
     if (str_rows.empty()) { std::cout << "No data, skipping.\n"; return; }
     int effective_num_rows = 0;
@@ -890,7 +864,7 @@ void run_multidim_reger_test(
     long long original_size_bytes = (long long)effective_num_rows * expected_dim * sizeof(double);
 
     for (int run = 0; run < NUM_RUNS; ++run) {
-        // --- ENCODING ---
+
         int num_rows = str_rows.size(); int num_cols = str_rows[0].size();
         std::vector<uint8_t> compressed_data;
         auto start_full_encode = std::chrono::high_resolution_clock::now();
@@ -920,13 +894,11 @@ void run_multidim_reger_test(
         write_binary_file(filename, compressed_data);
         auto end_full_encode = std::chrono::high_resolution_clock::now();
 
-        // --- DECODING ---
         auto start_full_decode = std::chrono::high_resolution_clock::now();
         auto file_data = read_binary_file(filename);
 
-        // 1. Secondary Decompress
         auto primary_restored = sec_comp->decompress(file_data);
-        // 2. Primary Decompress
+
         auto [decoded_scaled_rows, decoded_factors] = compressor.decode_multidim(primary_restored);
 
         std::vector<std::vector<double>> decoded_rows;
@@ -940,7 +912,6 @@ void run_multidim_reger_test(
         }
         auto end_full_decode = std::chrono::high_resolution_clock::now();
 
-        // --- VERIFICATION (run only once) ---
         if (run == 0) {
             std::vector<std::vector<double>> original_rows = read_csv_rows(csv_file_path);
             int verify_rows = 0;
@@ -955,7 +926,6 @@ void run_multidim_reger_test(
         all_peak_mem_bytes.push_back(static_cast<long long>(peak_mem_delta));
     }
 
-    // --- Stats ---
     double avg_compressed_size = std::accumulate(all_compressed_sizes.begin(), all_compressed_sizes.end(), 0.0) / NUM_RUNS;
     TimeStats enc_stats = calculate_stats(all_encoding_times_ns, effective_num_rows);
     TimeStats dec_stats = calculate_stats(all_decoding_times_ns, effective_num_rows);
@@ -996,7 +966,7 @@ void run_cluster_encoder_test(
     };
     ClusterCompressor compressor;
     apply_group_size(compressor);
-    std::string algorithm_name = compressor.get_name() + sec_comp->get_name(); // Combine names
+    std::string algorithm_name = compressor.get_name() + sec_comp->get_name();
 
     std::cout << "====================================================\n";
     std::cout << "Dataset: " << dataset_name << ", Method: " << algorithm_name << " (Multi-dim)\n";
@@ -1091,9 +1061,8 @@ void run_cluster_encoder_test(
         auto start_full_decode = std::chrono::high_resolution_clock::now();
         auto read_data = read_binary_file(filename);
 
-        // 1. Secondary Decode
         auto primary_data_restored = sec_comp->decompress(read_data);
-        // 2. Primary Decode
+
         auto decoded_rows = compressor.decode_multidim(primary_data_restored);
 
         auto end_full_decode = std::chrono::high_resolution_clock::now();
@@ -1115,7 +1084,6 @@ void run_cluster_encoder_test(
         all_peak_mem_bytes.push_back(static_cast<long long>(peak_mem_delta));
     }
 
-    // --- Stats ---
     double avg_compressed_size = std::accumulate(all_compressed_sizes.begin(), all_compressed_sizes.end(), 0.0) / NUM_RUNS;
     TimeStats enc_stats = calculate_stats(all_encoding_times_ns, effective_num_rows);
     TimeStats dec_stats = calculate_stats(all_decoding_times_ns, effective_num_rows);
@@ -1138,7 +1106,6 @@ void run_cluster_encoder_test(
     cleanup_method_output(output_dir, algorithm_name);
     std::filesystem::remove(page_csv_path);
 }
-
 
 template<typename Compressor>
 void run_byte_compression_test(const std::string& dataset, int dim, int num_rows, const std::string& path, const std::string& out_dir) {
@@ -1170,13 +1137,11 @@ void run_byte_compression_test(const std::string& dataset, int dim, int num_rows
               << "====================================================\n\n";
 }
 
-
-
 template<typename ClusterCompressor>
 void run_cluster_encoder_experiment_instance(
     const std::string& dataset_name, int dim, int num_rows,
     const std::string& csv_file_path, const std::string& output_dir,
-    int k, int page_size, int pack_size) // Parameters for the experiment
+    int k, int page_size, int pack_size)
 {
     ClusterCompressor compressor;
     std::string algorithm_name = compressor.get_name();
@@ -1195,7 +1160,6 @@ void run_cluster_encoder_experiment_instance(
     int mutable_dim = dim;
     auto compressed_data = compressor.encode_multidim(csv_file_path, mutable_dim, k, page_size, pack_size, block_size);
 
-    // Create a unique directory for this specific parameter combination to avoid file overwrites
     std::string param_string = algorithm_name + "_k" + std::to_string(k) + "_p" + std::to_string(page_size);
     std::string algo_output_dir = output_dir + "/" + dataset_name + "/" + param_string;
     std::filesystem::create_directories(algo_output_dir);
@@ -1223,7 +1187,6 @@ void run_cluster_encoder_experiment_instance(
     std::cout << "====================================================\n\n";
 }
 
-
 void run_k_sensitivity_experiment(const std::string& file_root, const std::string& output_dir) {
     std::cout << "\n\n\n####################################################\n";
     std::cout << "###   STARTING K-VALUE SENSITIVITY EXPERIMENT  ###\n";
@@ -1235,7 +1198,7 @@ void run_k_sensitivity_experiment(const std::string& file_root, const std::strin
     };
 
     std::vector<int> k_values = {10, 50, 100, 500, 1000};
-    int fixed_page_size = 10000; // Page size is fixed for this experiment
+    int fixed_page_size = 10000;
 
     for (const auto& ds_pair : datasets_to_test) {
         const std::string& dataset_name = ds_pair.first;
@@ -1264,7 +1227,7 @@ void run_page_size_sensitivity_experiment(const std::string& file_root, const st
     };
 
     std::vector<int> page_size_values = {1000, 2000, 5000, 10000, 20000};
-    int fixed_k_for_kcluster = 100; // K is fixed for KCluster in this experiment
+    int fixed_k_for_kcluster = 100;
 
     for (const auto& ds_pair : datasets_to_test) {
         const std::string& dataset_name = ds_pair.first;
@@ -1273,13 +1236,12 @@ void run_page_size_sensitivity_experiment(const std::string& file_root, const st
         std::string file_path = file_root + dataset_name + ".csv";
 
         for (int page_size : page_size_values) {
-            // Run for KCluster
+
             run_cluster_encoder_experiment_instance<KCluster>(
                 dataset_name, dim, num_rows, file_path, output_dir,
                 fixed_k_for_kcluster, page_size, 10
             );
 
-            // Run for ACluster (k value is ignored, pass 0 as placeholder)
             run_cluster_encoder_experiment_instance<ACluster>(
                 dataset_name, dim, num_rows, file_path, output_dir,
                 0, page_size, 10
@@ -1312,13 +1274,12 @@ void run_pack_size_sensitivity_experiment(const std::string& file_root, const st
         std::string file_path = file_root + dataset_name + ".csv";
 
         for (int pack_size : pack_size_values) {
-            // Run for KCluster
+
             run_cluster_encoder_experiment_instance<KCluster>(
                 dataset_name, dim, num_rows, file_path, output_dir,
                 fixed_k, fixed_page_size, pack_size
             );
 
-            // Run for ACluster (k is ignored but we pass fixed_k)
             run_cluster_encoder_experiment_instance<ACluster>(
                 dataset_name, dim, num_rows, file_path, output_dir,
                 fixed_k, fixed_page_size, pack_size
@@ -1984,7 +1945,6 @@ void run_kcluster_kmeans_all_dataset_experiment(
     avg_out.flush();
 }
 
-
 int legacy_experiment_catalog() {
     try {
         std::cout << std::unitbuf;
@@ -2002,14 +1962,9 @@ int legacy_experiment_catalog() {
         std::vector<double> reference_ratios = {0.10, 0.20, 0.30, 0.40, 0.50};
         std::vector<int> dim_expand_list = {8, 16, 32, 64};
 
-        // =========================
-        // Primary Benchmark Entry
-        // =========================
-        // Runs the default full benchmark loop and logs compression ratio / time for major methods.
         NoneCompressor none_comp;
         GzipCompressor gzip_comp;
         std::vector<SecondaryCompressor*> strategies = {&gzip_comp};
-        // std::vector<SecondaryCompressor*> strategies = {&none_comp, &gzip_comp};
 
         for (size_t i = 0; i < datasets.size(); ++i) {
             std::string file_path = fileRoot + datasets[i] + ".csv";
@@ -2026,65 +1981,12 @@ int legacy_experiment_catalog() {
             }
         }
 
-        // =========================
-        // Experiment Call Catalog
-        // =========================
-        // Runs a single Vortex + RLE multidimensional test on one dataset.
-        // run_vortex_test(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir);
-
-        // Runs one scalar columnar compression baseline test (Elf/Gorilla/Chimp/RLE/Huffman/ALP).
-        // run_columnar_encoder_test<Chimp>(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir, &gzip_comp);
-
-        // Runs one multi-dimensional Reger test.
-        // run_multidim_reger_test(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir, &gzip_comp);
-
-        // Runs one cluster encoder test instance for KCluster with optional secondary compressor.
-        // run_cluster_encoder_test<KCluster>(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir, &none_comp);
-
-        // Runs one byte-oriented baseline compression test (Vortex+RLE over raw row-major bytes).
-        // run_byte_compression_test(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir);
-
-        // Runs one parameterized cluster experiment instance (k/page_size/pack_size).
-        // run_cluster_encoder_experiment_instance<KCluster>(datasets[0], dims[0], data_size[0], fileRoot + datasets[0] + ".csv", outputDir, 100, 10000, 10);
-
-        // Runs k-value sensitivity experiment.
-        // run_k_sensitivity_experiment(fileRoot, outputDir);
-
-        // Runs page-size sensitivity experiment.
-        // run_page_size_sensitivity_experiment(fileRoot, outputDir);
-
-        // Runs pack-size sensitivity experiment.
-        // run_pack_size_sensitivity_experiment(fileRoot, outputDir);
-
-        // Runs cluster reference-ratio sweep for KCluster and ACluster.
-        // run_cluster_reference_experiment(fileRoot, outputDir, datasets, dims, reference_ratios);
-
-        // Runs ACluster three-mode reference experiment (NoRef / AdjRef / RandomShuffle).
-        // run_acluster_three_mode_reference_experiment(fileRoot, outputDir, datasets, dims, reference_ratios);
-
-        // Runs ACluster outlier-reference experiment with static and dynamic modes.
-        // run_acluster_outlier_experiment(fileRoot, outputDir, datasets, dims, reference_ratios);
-
-        // Runs dimensionality impact experiment by expanding selected dimensions.
-        // run_dimensionality_impact_experiment(fileRoot, outputDir, datasets.back(), dims.back(), dim_expand_list);
-
-        // Runs adjacent-reference sensitivity experiment for ACluster.
-        // run_acluster_adjacent_reference_experiment(fileRoot, outputDir, datasets, dims);
-
-        // Runs the subspace grouping experiment for KClusterSub.
-        // run_subspace_grouping_experiment(fileRoot, outputDir, datasets, dims, dimension_group_size);
-
-        // Runs KClusterKMeans full-dataset experiment.
-        // run_kcluster_kmeans_all_dataset_experiment(fileRoot, outputDir, datasets, dims);
-
     } catch (const std::exception& e) {
         std::cerr << "A critical error occurred in main: " << e.what() << std::endl;
         return 1;
     }
     return 0;
 }
-
-
 
 template void run_columnar_encoder_test<Chimp>(const std::string&, int, int, const std::string&, const std::string&, SecondaryCompressor*);
 template void run_columnar_encoder_test<Elf>(const std::string&, int, int, const std::string&, const std::string&, SecondaryCompressor*);

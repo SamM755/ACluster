@@ -1,0 +1,20 @@
+{
+  "data/final/BC.csv": "5597f381cc8be53c41b32821421ca2628ceefbe76612544a70de3c61e41af47e",
+  "data/final/BT.csv": "b3f39300e028160a8c7a2e1f5827b366333823fdfddc5a1c43cb34ec47c28a9c",
+  "data/final/Crop.csv": "e07dc8b84ff16e8b25b31092a4792e38bba7b154cde9ac7ce40d07b538f45a72",
+  "data/final/CT.csv": "d06b52f11826232131405b5e8d79488e0e69d1adfa8b4b800cbf1ba3bfc1bcba",
+  "data/final/Gas.csv": "f3320291daf5098ee835f63a429476318c49e0f67a69ec246dabd0da314ae8e3",
+  "data/final/Musk.csv": "9578b98818d2169b942146aee1e1fe5cb52929057eb3838fa97234e9d249ea71",
+  "data/final/PI.csv": "e02a663773d74b55ed0670e18fdc8bdfcbfb73f03cdd5db88168a87ed69e36a6",
+  "data/final/SSD.csv": "8b9b48f4e714c9f542900391a412f56ee25c858a1c8ed18d7267f7dc0d0ea320",
+  "data/final/WS.csv": "715c9ad09b7e5a2d50a833a855e544d2176363d023606df4c96751276d3bff82",
+  "data/raw/BC.csv": "5597f381cc8be53c41b32821421ca2628ceefbe76612544a70de3c61e41af47e",
+  "data/raw/BT.csv": "fc50f88142de550177c9bc302cf829c56cee2554d038d634f4d9a7a6346d9e32",
+  "data/raw/Crop.csv": "314f42e0f167c225beecf5dde863a75d4ae0308f93ed091c69152deb8d0ff701",
+  "data/raw/CT.csv": "70ff14cc1179aee08bc2f91baa1e0e93e410f86f1b538609ac60e049528a42cd",
+  "data/raw/Gas.csv": "7ef92d63951ca969d854efb2ec1a680af83ea8945f80381947ab1234beb2372f",
+  "data/raw/Musk.csv": "31c8ef2fe914653112ae2fb3e64fb3f0dc3f3c945a3fa4b62f0eea412a22b28a",
+  "data/raw/PI.csv": "e02a663773d74b55ed0670e18fdc8bdfcbfb73f03cdd5db88168a87ed69e36a6",
+  "data/raw/SSD.csv": "8b9b48f4e714c9f542900391a412f56ee25c858a1c8ed18d7267f7dc0d0ea320",
+  "data/raw/WS.csv": "715c9ad09b7e5a2d50a833a855e544d2176363d023606df4c96751276d3bff82"
+}

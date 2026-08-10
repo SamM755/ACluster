@@ -1,4 +1,3 @@
-// in algorithms/kcluster.h
 #ifndef KCLUSTER_H
 #define KCLUSTER_H
 
@@ -28,4 +27,4 @@ public:
     std::vector<std::vector<double>> decode_multidim(const std::vector<uint8_t>& compressed_data);
 };
 
-#endif // KCLUSTER_H
+#endif

@@ -77,7 +77,7 @@ std::vector<std::vector<double>> read_csv_rows(const std::string& file_path) {
             try {
                 current_row.push_back(std::stod(cell));
             } catch (const std::exception&) {
-                // Handle non-numeric values if necessary, e.g., push back 0.0 or NaN
+
                 current_row.push_back(0.0);
             }
         }

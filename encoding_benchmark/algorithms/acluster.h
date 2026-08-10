@@ -1,4 +1,3 @@
-// in algorithms/acluster.h
 #ifndef ACLUSTER_H
 #define ACLUSTER_H
 
@@ -14,7 +13,7 @@ public:
     std::vector<uint8_t> encode_multidim(
         const std::string& csv_file_path,
         int& dim,
-        int k, // k is ignored by ACluster
+        int k,
         int page_size,
         int pack_size = 10,
         int block_size = 10
@@ -28,4 +27,4 @@ public:
     std::vector<std::vector<double>> decode_multidim(const std::vector<uint8_t>& compressed_data);
 };
 
-#endif // ACLUSTER_H
+#endif
